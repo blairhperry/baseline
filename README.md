@@ -2,7 +2,7 @@
 
 A smart gym workout tracker for people who want to show up consistently and make steady progress — no program obsession required. Baseline generates a fresh, personalized routine each session, learns from your history, and adapts to how you're feeling that day.
 
-**Live app → [baseline.edgeworth901.com](https://baseline.edgeworth901.com)**
+**Live app → [blairhperry.github.io/baseline](https://blairhperry.github.io/baseline/)**
 
 ---
 
