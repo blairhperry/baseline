@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { collection, addDoc, getDocs, orderBy, query, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
@@ -53,6 +53,8 @@ const WORKOUTS = {
 const byName = {};
 Object.values(WORKOUTS).flat().forEach(e => { byName[e.name] = e; });
 
+const ALL_EXERCISE_NAMES = Object.values(WORKOUTS).flat().map(ex => ex.name);
+
 const AVOID_KEYWORDS = {
   legs:      ["Legs", "Quads", "Glutes", "Hamstrings", "Calves"],
   back:      ["Back"],
@@ -66,6 +68,14 @@ const TIMEFRAME_COUNTS = {
 };
 
 const TIMEFRAME_LABELS = { quick: "~20 min", standard: "~35 min", extended: "~50 min" };
+
+const chip = selected => ({
+  borderRadius: 10, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+  fontSize: 13, fontWeight: 600, transition: "all 0.15s",
+  border: `1.5px solid ${selected ? "#0EA5E9" : "#E2E8F0"}`,
+  background: selected ? "#F0F9FF" : "#FFFFFF",
+  color: selected ? "#0EA5E9" : "#64748B",
+});
 
 const GROUP_META = {
   "Upper Push": { color: "#0EA5E9", bg: "#F0F9FF" },
@@ -110,14 +120,22 @@ function getRoutineGroups(routine) {
   return [...groups];
 }
 
-// Recency weight (3× for fresh exercises) × group freshness (2× for untrained groups)
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function weightedPick(arr, n, recentNames = new Set(), groupRecency = {}) {
   const weighted = arr.flatMap(ex => {
     const recW = recentNames.has(ex.name) ? 1 : 3;
     const grpW = classifyGroups(ex.muscles).some(g => (groupRecency[g] ?? 0) === 0) ? 2 : 1;
     return Array(recW * grpW).fill(ex);
   });
-  const shuffled = [...weighted].sort(() => Math.random() - 0.5);
+  const shuffled = shuffle(weighted);
   const seen = new Set();
   const result = [];
   for (const ex of shuffled) {
@@ -165,7 +183,7 @@ function loadState() {
   } catch { return null; }
 }
 
-function buildEntry(routine, checked, metrics, doneCount, totalCount, notes = "", checkin = null) {
+function buildEntry(routine, checked, metrics, notes = "", checkin = null) {
   const exercises = ["cardio", "strength", "core"].flatMap(cat =>
     routine[cat].map((ex, i) => ({
       name: ex.name,
@@ -178,8 +196,8 @@ function buildEntry(routine, checked, metrics, doneCount, totalCount, notes = ""
     id: Date.now(),
     date: new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
     exercises,
-    completedCount: doneCount,
-    totalCount,
+    completedCount: exercises.filter(e => e.completed).length,
+    totalCount: exercises.length,
     notes: notes.trim(),
     checkin: checkin ? { energy: checkin.energy, timeframe: checkin.timeframe, cardioDone: checkin.cardioDone } : null,
   };
@@ -241,14 +259,6 @@ function CheckIn({ onComplete, defaultTimeframe }) {
     { key: "back",      label: "Back"             },
     { key: "shoulders", label: "Shoulders & Arms" },
   ];
-
-  const chip = selected => ({
-    borderRadius: 10, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-    fontSize: 13, fontWeight: 600, transition: "all 0.15s",
-    border: `1.5px solid ${selected ? "#0EA5E9" : "#E2E8F0"}`,
-    background: selected ? "#F0F9FF" : "#FFFFFF",
-    color: selected ? "#0EA5E9" : "#64748B",
-  });
 
   return (
     <div style={{ animation: "fadeUp 0.3s ease both" }}>
@@ -318,47 +328,6 @@ function CheckIn({ onComplete, defaultTimeframe }) {
       >
         Build My Workout →
       </button>
-    </div>
-  );
-}
-
-// ── Login Screen ──────────────────────────────────────────────────────────────
-function LoginScreen() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
-
-  const handleLogin = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (e) {
-      setError("Sign-in failed. Please try again.");
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #F8FAFC 0%, #EFF6FF 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", fontFamily: "'DM Sans', sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-      <div style={{ maxWidth: 360, width: "100%", textAlign: "center" }}>
-        <div style={{ fontSize: 52, marginBottom: 20 }}>🏋️</div>
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 34, color: "#0F172A", margin: "0 0 10px", letterSpacing: "-0.5px", fontWeight: 400 }}>Baseline</h1>
-        <p style={{ fontSize: 14, color: "#64748B", margin: "0 0 36px", lineHeight: 1.6 }}>
-          Sign in to save your workout history and access it from any device.
-        </p>
-        <button
-          onClick={handleLogin}
-          disabled={loading}
-          style={{ width: "100%", padding: "14px 20px", borderRadius: 14, border: "1.5px solid #E2E8F0", background: "#FFFFFF", cursor: loading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: 15, fontWeight: 600, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", transition: "box-shadow 0.15s", opacity: loading ? 0.6 : 1 }}
-          onMouseEnter={e => { if (!loading) e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"; }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)"; }}
-        >
-          <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/><path fill="#34A853" d="M6.3 14.7l7 5.1C15.1 16.1 19.2 13 24 13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 16.3 2 9.7 7.4 6.3 14.7z"/><path fill="#FBBC05" d="M24 46c5.5 0 10.5-1.9 14.3-5l-6.6-5.4C29.8 37.3 27 38 24 38c-5.9 0-10.9-4-12.7-9.4l-7 5.4C7.9 41.9 15.4 46 24 46z"/><path fill="#EA4335" d="M44.5 20H24v8.5h11.8c-1 3-3.3 5.4-6.1 7l6.6 5.4c4-3.7 6.7-9.3 6.7-16 0-1.3-.2-2.7-.5-4z"/></svg>
-          {loading ? "Signing in…" : "Sign in with Google"}
-        </button>
-        {error && <p style={{ marginTop: 14, fontSize: 13, color: "#EF4444" }}>{error}</p>}
-      </div>
     </div>
   );
 }
@@ -575,6 +544,18 @@ function HistoryScreen({ history, loading, isGuest, onSignIn, onUpdateEntry }) {
   );
 }
 
+// ── Bottom Sheet (shared shell for all modal sheets) ─────────────────────────
+function BottomSheet({ onClose, children }) {
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "#FFFFFF", borderRadius: "22px 22px 0 0", padding: "20px 0 40px", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)", animation: "slideUp 0.25s ease" }}>
+        <div style={{ width: 40, height: 4, background: "#E2E8F0", borderRadius: 2, margin: "0 auto 18px" }} />
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ── Picker Sheet ─────────────────────────────────────────────────────────────
 function PickerSheet({ category, currentName, onSelect, onClose, blockedExercises, onToggleBlock, neverUsedSet, showNewBadge }) {
   const meta = CATEGORY_META[category];
@@ -615,32 +596,28 @@ function PickerSheet({ category, currentName, onSelect, onClose, blockedExercise
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "#FFFFFF", borderRadius: "22px 22px 0 0", padding: "20px 0 40px", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)", animation: "slideUp 0.25s ease" }}>
-        <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
-        <div style={{ width: 40, height: 4, background: "#E2E8F0", borderRadius: 2, margin: "0 auto 18px" }} />
-        <div style={{ padding: "0 20px 14px", borderBottom: "1px solid #F1F5F9" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: meta.color, fontFamily: "'DM Sans', sans-serif" }}>
-            {meta.icon} Swap — {currentName}
-          </span>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}>Suggested swaps are highlighted first</p>
-        </div>
-        <div style={{ overflowY: "auto", maxHeight: "58vh" }}>
-          {suggested.length > 0 && (
-            <>
-              <div style={{ padding: "10px 20px 6px", fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#059669", fontFamily: "'DM Sans', sans-serif" }}>Suggested</div>
-              {suggested.map(ex => <Row key={ex.name} ex={ex} badge />)}
-              <div style={{ padding: "10px 20px 6px", fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}>All Options</div>
-            </>
-          )}
-          <Row ex={byName[currentName]} />
-          {others.map(ex => <Row key={ex.name} ex={ex} />)}
-        </div>
-        <div style={{ padding: "16px 20px 0" }}>
-          <button onClick={onClose} style={{ width: "100%", padding: "13px", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
-        </div>
+    <BottomSheet onClose={onClose}>
+      <div style={{ padding: "0 20px 14px", borderBottom: "1px solid #F1F5F9" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: meta.color, fontFamily: "'DM Sans', sans-serif" }}>
+          {meta.icon} Swap — {currentName}
+        </span>
+        <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}>Suggested swaps are highlighted first</p>
       </div>
-    </div>
+      <div style={{ overflowY: "auto", maxHeight: "58vh" }}>
+        {suggested.length > 0 && (
+          <>
+            <div style={{ padding: "10px 20px 6px", fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#059669", fontFamily: "'DM Sans', sans-serif" }}>Suggested</div>
+            {suggested.map(ex => <Row key={ex.name} ex={ex} badge />)}
+            <div style={{ padding: "10px 20px 6px", fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}>All Options</div>
+          </>
+        )}
+        <Row ex={byName[currentName]} />
+        {others.map(ex => <Row key={ex.name} ex={ex} />)}
+      </div>
+      <div style={{ padding: "16px 20px 0" }}>
+        <button onClick={onClose} style={{ width: "100%", padding: "13px", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -721,51 +698,48 @@ function AddSheet({ category, currentNames, onAdd, onClose, blockedExercises, ne
   const available = WORKOUTS[category].filter(ex => !currentNames.includes(ex.name) && !blockedExercises.has(ex.name));
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "#FFFFFF", borderRadius: "22px 22px 0 0", padding: "20px 0 40px", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)", animation: "slideUp 0.25s ease" }}>
-        <div style={{ width: 40, height: 4, background: "#E2E8F0", borderRadius: 2, margin: "0 auto 18px" }} />
-        <div style={{ padding: "0 20px 14px", borderBottom: "1px solid #F1F5F9" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: meta.color, fontFamily: "'DM Sans', sans-serif" }}>
-            {meta.icon} Add — {meta.label}
-          </span>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}>
-            Tap an exercise to add it to today's workout
-          </p>
-        </div>
-        <div style={{ overflowY: "auto", maxHeight: "58vh" }}>
-          {available.length === 0 ? (
-            <p style={{ padding: "24px 20px", fontSize: 13, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", textAlign: "center", margin: 0 }}>
-              All {meta.label.toLowerCase()} exercises are already in your routine.
-            </p>
-          ) : available.map(ex => {
-            const isNew = showNewBadge && neverUsedSet.has(ex.name);
-            return (
-              <div key={ex.name} onClick={() => onAdd(ex)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 20px", borderBottom: "1px solid #F8FAFC", cursor: "pointer" }}
-                onMouseEnter={e => e.currentTarget.style.background = meta.bg}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-              >
-                <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: "#E2E8F0" }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "#1E293B", fontFamily: "'DM Sans', sans-serif" }}>{ex.name}</span>
-                    {isNew && <span style={{ fontSize: 10, fontWeight: 700, color: "#D97706", background: "#FFFBEB", padding: "2px 6px", borderRadius: 10, border: "1px solid #FDE68A" }}>Try it ✦</span>}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>
-                    {formatScheme(ex)} · {ex.muscles}
-                  </div>
-                </div>
-                <span style={{ fontSize: 18, color: meta.color, lineHeight: 1 }}>+</span>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ padding: "16px 20px 0" }}>
-          <button onClick={onClose} style={{ width: "100%", padding: "13px", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
-            Cancel
-          </button>
-        </div>
+    <BottomSheet onClose={onClose}>
+      <div style={{ padding: "0 20px 14px", borderBottom: "1px solid #F1F5F9" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: meta.color, fontFamily: "'DM Sans', sans-serif" }}>
+          {meta.icon} Add — {meta.label}
+        </span>
+        <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}>
+          Tap an exercise to add it to today's workout
+        </p>
       </div>
-    </div>
+      <div style={{ overflowY: "auto", maxHeight: "58vh" }}>
+        {available.length === 0 ? (
+          <p style={{ padding: "24px 20px", fontSize: 13, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", textAlign: "center", margin: 0 }}>
+            All {meta.label.toLowerCase()} exercises are already in your routine.
+          </p>
+        ) : available.map(ex => {
+          const isNew = showNewBadge && neverUsedSet.has(ex.name);
+          return (
+            <div key={ex.name} onClick={() => onAdd(ex)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 20px", borderBottom: "1px solid #F8FAFC", cursor: "pointer" }}
+              onMouseEnter={e => e.currentTarget.style.background = meta.bg}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: "#E2E8F0" }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#1E293B", fontFamily: "'DM Sans', sans-serif" }}>{ex.name}</span>
+                  {isNew && <span style={{ fontSize: 10, fontWeight: 700, color: "#D97706", background: "#FFFBEB", padding: "2px 6px", borderRadius: 10, border: "1px solid #FDE68A" }}>Try it ✦</span>}
+                </div>
+                <div style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>
+                  {formatScheme(ex)} · {ex.muscles}
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: meta.color, lineHeight: 1 }}>+</span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ padding: "16px 20px 0" }}>
+        <button onClick={onClose} style={{ width: "100%", padding: "13px", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+          Cancel
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -776,21 +750,11 @@ function PrefsSheet({ onClose, blockedExercises, onToggleBlock, defaultTimeframe
     .filter(g => g.exercises.length > 0);
   const totalBlocked = blockedExercises.size;
 
-  const chip = selected => ({
-    borderRadius: 10, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-    fontSize: 13, fontWeight: 600, transition: "all 0.15s",
-    border: `1.5px solid ${selected ? "#0EA5E9" : "#E2E8F0"}`,
-    background: selected ? "#F0F9FF" : "#FFFFFF",
-    color: selected ? "#0EA5E9" : "#64748B",
-  });
-
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "#FFFFFF", borderRadius: "22px 22px 0 0", padding: "20px 0 40px", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)", animation: "slideUp 0.25s ease" }}>
-        <div style={{ width: 40, height: 4, background: "#E2E8F0", borderRadius: 2, margin: "0 auto 18px" }} />
-        <div style={{ padding: "0 20px 14px", borderBottom: "1px solid #F1F5F9" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Serif Display', serif" }}>Preferences</span>
-        </div>
+    <BottomSheet onClose={onClose}>
+      <div style={{ padding: "0 20px 14px", borderBottom: "1px solid #F1F5F9" }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Serif Display', serif" }}>Preferences</span>
+      </div>
 
         <div style={{ overflowY: "auto", maxHeight: "65vh" }}>
           {/* Default Timeframe */}
@@ -848,11 +812,10 @@ function PrefsSheet({ onClose, blockedExercises, onToggleBlock, defaultTimeframe
           </div>
         </div>
 
-        <div style={{ padding: "16px 20px 0" }}>
-          <button onClick={onClose} style={{ width: "100%", padding: "13px", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Done</button>
-        </div>
+      <div style={{ padding: "16px 20px 0" }}>
+        <button onClick={onClose} style={{ width: "100%", padding: "13px", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Done</button>
       </div>
-    </div>
+    </BottomSheet>
   );
 }
 
@@ -897,7 +860,6 @@ export default function App() {
   const [user, setUser]                 = useState(undefined);
   const [routine, setRoutine]           = useState(null);
   const [checked, setChecked]           = useState({});
-  const [sessionCount, setSession]      = useState(0);
   const [animKey, setAnimKey]           = useState(0);
   const [picker, setPicker]             = useState(null);
   const [addPicker, setAddPicker]       = useState(null);
@@ -905,7 +867,6 @@ export default function App() {
   const [history, setHistory]           = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [metrics, setMetrics]           = useState({});
-  const [lastMetrics, setLastMetrics]   = useState({});
   const [lastCheckin, setLastCheckin]   = useState(null);
   const [sessionNotes, setSessionNotes] = useState("");
   const [blockedExercises, setBlockedExercises]       = useState(new Set());
@@ -923,10 +884,8 @@ export default function App() {
     if (user === null) {
       try {
         const raw = localStorage.getItem(GUEST_HISTORY_KEY);
-        const entries = raw ? JSON.parse(raw) : [];
-        setHistory(entries);
-        setLastMetrics(buildLastMetrics(entries));
-      } catch {}
+        setHistory(raw ? JSON.parse(raw) : []);
+      } catch { setHistory([]); }
       try {
         const raw = localStorage.getItem(GUEST_BLOCKED_KEY);
         setBlockedExercises(new Set(raw ? JSON.parse(raw) : []));
@@ -938,14 +897,16 @@ export default function App() {
       } catch {}
       return;
     }
+    // Clear stale guest state before the async Firestore load
+    setHistory([]);
+    setBlockedExercises(new Set());
+    setDefaultTimeframePref("standard");
     setHistoryLoading(true);
     const q = query(collection(db, "users", user.uid, "history"), orderBy("id", "asc"));
     const prefsRef = doc(db, "users", user.uid, "preferences", "exercises");
     Promise.all([getDocs(q), getDoc(prefsRef)])
       .then(([snap, prefsSnap]) => {
-        const entries = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
-        setHistory(entries);
-        setLastMetrics(buildLastMetrics(entries));
+        setHistory(snap.docs.map(d => ({ ...d.data(), _docId: d.id })));
         if (prefsSnap.exists()) {
           setBlockedExercises(new Set(prefsSnap.data().blocked || []));
           setDefaultTimeframePref(prefsSnap.data().defaultTimeframe || "standard");
@@ -960,7 +921,6 @@ export default function App() {
     if (saved?.routine && saved?.checked !== undefined) {
       setRoutine(saved.routine);
       setChecked(saved.checked);
-      setSession(saved.sessionCount || 0);
       setMetrics(saved.metrics || {});
       setSessionNotes(saved.notes || "");
     }
@@ -970,26 +930,27 @@ export default function App() {
   useEffect(() => {
     if (!initialized.current) return;
     if (!routine) { try { localStorage.removeItem(STORAGE_KEY); } catch {} return; }
-    saveState({ routine, checked, sessionCount, metrics, notes: sessionNotes });
-  }, [routine, checked, sessionCount, metrics, sessionNotes]);
+    saveState({ routine, checked, metrics, notes: sessionNotes });
+  }, [routine, checked, metrics, sessionNotes]);
 
-  const commitToHistory = async (currentRoutine, currentChecked, currentMetrics, doneCount, totalCount, notes, checkin) => {
-    if (doneCount === 0) return;
-    const entry = buildEntry(currentRoutine, currentChecked, currentMetrics, doneCount, totalCount, notes, checkin);
+  const commitToHistory = async (currentRoutine, currentChecked, currentMetrics, notes, checkin) => {
+    if (!Object.values(currentChecked).some(Boolean)) return;
+    const entry = buildEntry(currentRoutine, currentChecked, currentMetrics, notes, checkin);
+    let stored = entry;
     if (user) {
       try {
         const docRef = await addDoc(collection(db, "users", user.uid, "history"), entry);
-        const stored = { ...entry, _docId: docRef.id };
-        setHistory(prev => { const next = [...prev, stored]; setLastMetrics(buildLastMetrics(next)); return next; });
-        return;
-      } catch {}
+        stored = { ...entry, _docId: docRef.id };
+      } catch {
+        return; // Firestore write failed — don't create a phantom entry
+      }
     } else {
       try {
         const existing = JSON.parse(localStorage.getItem(GUEST_HISTORY_KEY) || "[]");
         localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify([...existing, entry]));
       } catch {}
     }
-    setHistory(prev => { const next = [...prev, entry]; setLastMetrics(buildLastMetrics(next)); return next; });
+    setHistory(prev => [...prev, stored]);
   };
 
   const toggleBlock = async (exerciseName) => {
@@ -1024,14 +985,11 @@ export default function App() {
   };
 
   const handleUpdateEntry = async (updatedEntry) => {
-    setHistory(prev => {
-      const next = prev.map(e => e.id === updatedEntry.id ? updatedEntry : e);
-      setLastMetrics(buildLastMetrics(next));
-      if (!user) {
-        try { localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(next)); } catch {}
-      }
-      return next;
-    });
+    const next = history.map(e => e.id === updatedEntry.id ? updatedEntry : e);
+    setHistory(next);
+    if (!user) {
+      try { localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(next)); } catch {}
+    }
     if (user && updatedEntry._docId) {
       try {
         const { _docId, ...data } = updatedEntry;
@@ -1043,10 +1001,15 @@ export default function App() {
   const totalEx   = routine ? routine.cardio.length + routine.core.length + routine.strength.length : 0;
   const doneCount = Object.values(checked).filter(Boolean).length;
 
-  // Derived sets for "Try it" badges
-  const usedNames    = new Set(history.flatMap(e => e.exercises?.map(ex => ex.name) || []));
-  const neverUsedSet = new Set(Object.values(WORKOUTS).flat().map(ex => ex.name).filter(n => !usedNames.has(n)));
-  const showNewBadge = history.length >= 2;
+  const lastMetrics = useMemo(() => buildLastMetrics(history), [history]);
+
+  const { neverUsedSet, showNewBadge } = useMemo(() => {
+    const usedNames = new Set(history.flatMap(e => e.exercises?.map(ex => ex.name) || []));
+    return {
+      neverUsedSet: new Set(ALL_EXERCISE_NAMES.filter(n => !usedNames.has(n))),
+      showNewBadge: history.length >= 2,
+    };
+  }, [history]);
 
   const handleCheckinComplete = (checkin) => {
     setLastCheckin(checkin);
@@ -1055,22 +1018,20 @@ export default function App() {
   };
 
   const handleFinish = async () => {
-    await commitToHistory(routine, checked, metrics, doneCount, totalEx, sessionNotes, lastCheckin);
+    await commitToHistory(routine, checked, metrics, sessionNotes, lastCheckin);
     setRoutine(null);
     setChecked({});
     setMetrics({});
     setSessionNotes("");
-    setSession(s => s + 1);
     setTab("history");
   };
 
   const handleNew = async () => {
-    await commitToHistory(routine, checked, metrics, doneCount, totalEx, sessionNotes, lastCheckin);
+    await commitToHistory(routine, checked, metrics, sessionNotes, lastCheckin);
     setRoutine(null);
     setChecked({});
     setMetrics({});
     setSessionNotes("");
-    setSession(s => s + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -1135,7 +1096,10 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #F8FAFC 0%, #EFF6FF 100%)", fontFamily: "'DM Sans', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-      <style>{`@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      <style>{`
+        @keyframes fadeUp  { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+      `}</style>
 
       <div style={{ maxWidth: 520, margin: "0 auto", padding: "28px 20px 100px" }}>
 
