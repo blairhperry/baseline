@@ -46,11 +46,29 @@ function pick(arr, n, exclude = []) {
   return [...available].sort(() => Math.random() - 0.5).slice(0, n);
 }
 
-function generateRoutine() {
+const AVOID_KEYWORDS = {
+  legs:      ["Legs", "Quads", "Glutes", "Hamstrings", "Calves"],
+  back:      ["Back"],
+  shoulders: ["Shoulder", "Tricep", "Bicep", "Delt", "Trap"],
+};
+
+function generateRoutine(checkin = null) {
+  let cardioPool   = [...WORKOUTS.cardio];
+  let strengthPool = [...WORKOUTS.strength];
+  let corePool     = [...WORKOUTS.core];
+
+  if (checkin?.avoidMuscles?.length > 0) {
+    const excluded = checkin.avoidMuscles.flatMap(g => AVOID_KEYWORDS[g] || []);
+    const ok = ex => !excluded.some(kw => ex.muscles.includes(kw));
+    const fc = cardioPool.filter(ok);   if (fc.length  >= 1) cardioPool   = fc;
+    const fs = strengthPool.filter(ok); if (fs.length  >= 3) strengthPool = fs;
+    const fco = corePool.filter(ok);    if (fco.length >= 2) corePool     = fco;
+  }
+
   return {
-    cardio:   pick(WORKOUTS.cardio, 1),
-    strength: pick(WORKOUTS.strength, 4),
-    core:     pick(WORKOUTS.core, 2),
+    cardio:   checkin?.cardioDone ? [] : pick(cardioPool, 1),
+    strength: pick(strengthPool, checkin?.energy === "low" ? 3 : 4),
+    core:     pick(corePool, 2),
   };
 }
 
@@ -118,6 +136,90 @@ function buildLastMetrics(history) {
     });
   });
   return last;
+}
+
+// ── Check-In Screen ───────────────────────────────────────────────────────────
+function CheckIn({ onComplete }) {
+  const [energy, setEnergy]             = useState("good");
+  const [cardioDone, setCardioDone]     = useState(false);
+  const [avoidMuscles, setAvoidMuscles] = useState([]);
+
+  const toggleAvoid = group =>
+    setAvoidMuscles(prev =>
+      prev.includes(group) ? prev.filter(g => g !== group) : [...prev, group]
+    );
+
+  const ENERGY_OPTIONS = [
+    { key: "low",  icon: "😴", label: "Low"    },
+    { key: "good", icon: "💪", label: "Good"   },
+    { key: "high", icon: "⚡", label: "Pumped" },
+  ];
+  const AVOID_OPTIONS = [
+    { key: "legs",      label: "Legs"             },
+    { key: "back",      label: "Back"             },
+    { key: "shoulders", label: "Shoulders & Arms" },
+  ];
+
+  const chip = selected => ({
+    borderRadius: 10, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+    fontSize: 13, fontWeight: 600, transition: "all 0.15s",
+    border: `1.5px solid ${selected ? "#0EA5E9" : "#E2E8F0"}`,
+    background: selected ? "#F0F9FF" : "#FFFFFF",
+    color: selected ? "#0EA5E9" : "#64748B",
+  });
+
+  return (
+    <div style={{ animation: "fadeUp 0.3s ease both" }}>
+      <p style={{ margin: "0 0 28px", fontSize: 14, color: "#64748B", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6 }}>
+        Answer a couple of quick questions and we'll tailor today's routine to how you're feeling.
+      </p>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", marginBottom: 10 }}>How's your energy today?</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {ENERGY_OPTIONS.map(opt => (
+            <button key={opt.key} onClick={() => setEnergy(opt.key)}
+              style={{ ...chip(energy === opt.key), flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "12px 8px" }}>
+              <span style={{ fontSize: 22 }}>{opt.icon}</span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", marginBottom: 10 }}>Any cardio already today?</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setCardioDone(false)} style={{ ...chip(!cardioDone), flex: 1, padding: "10px 0" }}>Nope</button>
+          <button onClick={() => setCardioDone(true)}  style={{ ...chip(cardioDone),  flex: 1, padding: "10px 0" }}>Yes 🏃</button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 36 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>
+          Anything to go easy on? <span style={{ fontWeight: 400, color: "#94A3B8" }}>(optional)</span>
+        </div>
+        <div style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginBottom: 10 }}>Select any that apply</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {AVOID_OPTIONS.map(opt => (
+            <button key={opt.key} onClick={() => toggleAvoid(opt.key)}
+              style={{ ...chip(avoidMuscles.includes(opt.key)), padding: "9px 14px" }}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={() => onComplete({ energy, cardioDone, avoidMuscles })}
+        style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #1E293B 0%, #334155 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", transition: "transform 0.15s, box-shadow 0.15s" }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(15,23,42,0.3)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(15,23,42,0.25)"; }}
+      >
+        Build My Workout →
+      </button>
+    </div>
+  );
 }
 
 // ── Login Screen ──────────────────────────────────────────────────────────────
@@ -472,8 +574,9 @@ export default function App() {
   const [tab, setTab]              = useState("today");
   const [history, setHistory]      = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [metrics, setMetrics]      = useState({}); // keyed by exercise name
+  const [metrics, setMetrics]         = useState({});
   const [lastMetrics, setLastMetrics] = useState({});
+  const [lastCheckin, setLastCheckin] = useState(null);
   const initialized = useRef(false);
 
   // Auth state listener
@@ -497,7 +600,7 @@ export default function App() {
       .finally(() => setHistoryLoading(false));
   }, [user]);
 
-  // Load current session from localStorage
+  // Load current session from localStorage; if nothing saved, show check-in
   useEffect(() => {
     const saved = loadState();
     if (saved?.routine && saved?.checked !== undefined) {
@@ -505,18 +608,13 @@ export default function App() {
       setChecked(saved.checked);
       setSession(saved.sessionCount || 0);
       setMetrics(saved.metrics || {});
-    } else {
-      const r = generateRoutine();
-      setRoutine(r);
-      setChecked({});
-      setMetrics({});
-      saveState({ routine: r, checked: {}, sessionCount: 0, metrics: {} });
     }
     initialized.current = true;
   }, []);
 
   useEffect(() => {
-    if (!initialized.current || !routine) return;
+    if (!initialized.current) return;
+    if (!routine) { try { localStorage.removeItem(STORAGE_KEY); } catch {} return; }
     saveState({ routine, checked, sessionCount, metrics });
   }, [routine, checked, sessionCount, metrics]);
 
@@ -536,25 +634,27 @@ export default function App() {
   const totalEx   = routine ? routine.cardio.length + routine.core.length + routine.strength.length : 0;
   const doneCount = Object.values(checked).filter(Boolean).length;
 
+  const handleCheckinComplete = (checkin) => {
+    setLastCheckin(checkin);
+    setRoutine(generateRoutine(checkin));
+    setAnimKey(k => k + 1);
+  };
+
   const handleFinish = async () => {
     await commitToHistory(routine, checked, metrics, doneCount, totalEx);
-    const r = generateRoutine();
-    setRoutine(r);
+    setRoutine(null);
     setChecked({});
     setMetrics({});
     setSession(s => s + 1);
-    setAnimKey(k => k + 1);
     setTab("history");
   };
 
   const handleNew = async () => {
     await commitToHistory(routine, checked, metrics, doneCount, totalEx);
-    const r = generateRoutine();
-    setRoutine(r);
+    setRoutine(null);
     setChecked({});
     setMetrics({});
     setSession(s => s + 1);
-    setAnimKey(k => k + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -650,44 +750,55 @@ export default function App() {
 
         {tab === "today" && (
           <>
-            <div style={{ marginBottom: 28 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                <span style={{ fontSize: 13, color: "#64748B" }}>
-                  {doneCount === totalEx && totalEx > 0 ? "🎉 Workout complete!" : `${doneCount} of ${totalEx} done`}
-                </span>
-                <span style={{ fontSize: 13, color: "#64748B", fontWeight: 600 }}>{totalEx > 0 ? Math.round((doneCount / totalEx) * 100) : 0}%</span>
-              </div>
-              <div style={{ height: 6, background: "#E2E8F0", borderRadius: 10, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${totalEx > 0 ? (doneCount / totalEx) * 100 : 0}%`, background: doneCount === totalEx && totalEx > 0 ? "#22C55E" : "linear-gradient(90deg, #0EA5E9, #8B5CF6)", borderRadius: 10, transition: "width 0.4s ease" }} />
-              </div>
-            </div>
+            {!routine ? (
+              <CheckIn onComplete={handleCheckinComplete} />
+            ) : (
+              <>
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <span style={{ fontSize: 13, color: "#64748B" }}>
+                      {doneCount === totalEx && totalEx > 0 ? "🎉 Workout complete!" : `${doneCount} of ${totalEx} done`}
+                    </span>
+                    <span style={{ fontSize: 13, color: "#64748B", fontWeight: 600 }}>{totalEx > 0 ? Math.round((doneCount / totalEx) * 100) : 0}%</span>
+                  </div>
+                  <div style={{ height: 6, background: "#E2E8F0", borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${totalEx > 0 ? (doneCount / totalEx) * 100 : 0}%`, background: doneCount === totalEx && totalEx > 0 ? "#22C55E" : "linear-gradient(90deg, #0EA5E9, #8B5CF6)", borderRadius: 10, transition: "width 0.4s ease" }} />
+                  </div>
+                </div>
 
-            {routine && (
-              <div key={animKey} style={{ animation: "fadeUp 0.35s ease both" }}>
-                <Section category="cardio"   exercises={routine.cardio}   done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("cardio")}   metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
-                <Section category="strength" exercises={routine.strength} done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("strength")} metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
-                <Section category="core"     exercises={routine.core}     done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("core")}     metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
-              </div>
+                <div key={animKey} style={{ animation: "fadeUp 0.35s ease both" }}>
+                  {lastCheckin?.cardioDone && (
+                    <div style={{ background: "#F0FDF4", border: "1.5px solid #BBF7D0", borderRadius: 12, padding: "10px 16px", marginBottom: 20, fontSize: 13, fontWeight: 500, color: "#15803D", fontFamily: "'DM Sans', sans-serif" }}>
+                      🏃 Cardio skipped — you already got it in today!
+                    </div>
+                  )}
+                  {routine.cardio.length > 0 && (
+                    <Section category="cardio"   exercises={routine.cardio}   done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("cardio")}   metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
+                  )}
+                  <Section category="strength" exercises={routine.strength} done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("strength")} metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
+                  <Section category="core"     exercises={routine.core}     done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("core")}     metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
+                </div>
+
+                <div style={{ background: "#FFFBEB", border: "1.5px solid #FDE68A", borderRadius: 14, padding: "14px 18px", marginBottom: 16 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: "#92400E", lineHeight: 1.5 }}>
+                    <strong>Rest tip:</strong> 45–60 sec between strength sets. Straight through core. 2–3 min between cardio and weights.
+                  </p>
+                </div>
+
+                {doneCount > 0 && (
+                  <button onClick={handleFinish} style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #16A34A 0%, #15803D 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(22,163,74,0.3)", transition: "transform 0.15s, box-shadow 0.15s", marginBottom: 10 }}
+                    onMouseEnter={e => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = "0 8px 28px rgba(22,163,74,0.4)"; }}
+                    onMouseLeave={e => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "0 4px 20px rgba(22,163,74,0.3)"; }}
+                  >✓ Finish &amp; Save Workout</button>
+                )}
+
+                <button onClick={handleNew} style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #1E293B 0%, #334155 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", transition: "transform 0.15s, box-shadow 0.15s" }}
+                  onMouseEnter={e => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = "0 8px 28px rgba(15,23,42,0.3)"; }}
+                  onMouseLeave={e => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "0 4px 20px rgba(15,23,42,0.25)"; }}
+                >🔀 New Routine</button>
+                <p style={{ textAlign: "center", fontSize: 12, color: "#94A3B8", marginTop: 10, marginBottom: 0 }}>Your routine is saved and will be here when you return</p>
+              </>
             )}
-
-            <div style={{ background: "#FFFBEB", border: "1.5px solid #FDE68A", borderRadius: 14, padding: "14px 18px", marginBottom: 16 }}>
-              <p style={{ margin: 0, fontSize: 13, color: "#92400E", lineHeight: 1.5 }}>
-                <strong>Rest tip:</strong> 45–60 sec between strength sets. Straight through core. 2–3 min between cardio and weights.
-              </p>
-            </div>
-
-            {doneCount > 0 && (
-              <button onClick={handleFinish} style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #16A34A 0%, #15803D 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(22,163,74,0.3)", transition: "transform 0.15s, box-shadow 0.15s", marginBottom: 10 }}
-                onMouseEnter={e => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = "0 8px 28px rgba(22,163,74,0.4)"; }}
-                onMouseLeave={e => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "0 4px 20px rgba(22,163,74,0.3)"; }}
-              >✓ Finish &amp; Save Workout</button>
-            )}
-
-            <button onClick={handleNew} style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #1E293B 0%, #334155 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", transition: "transform 0.15s, box-shadow 0.15s" }}
-              onMouseEnter={e => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = "0 8px 28px rgba(15,23,42,0.3)"; }}
-              onMouseLeave={e => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "0 4px 20px rgba(15,23,42,0.25)"; }}
-            >🔀 Generate New Routine</button>
-            <p style={{ textAlign: "center", fontSize: 12, color: "#94A3B8", marginTop: 10, marginBottom: 0 }}>Your routine is saved and will be here when you return</p>
           </>
         )}
 
