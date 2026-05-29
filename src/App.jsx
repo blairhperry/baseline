@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import { collection, addDoc, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, addDoc, getDocs, orderBy, query, doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
 const WORKOUTS = {
@@ -21,6 +21,11 @@ const WORKOUTS = {
     { name: "Hanging Knee Raises", sets: 3, reps: 12, note: "Control the descent, no swinging", muscles: "Lower Abs · Hip Flexors", subs: ["Stability Ball Crunches", "Dead Bug"] },
     { name: "Bird Dog", sets: 3, reps: "10 each side", note: "Pause 2 sec at full extension", muscles: "Lower Back · Glutes · Core", subs: ["Dead Bug", "Plank"] },
     { name: "Stability Ball Crunches", sets: 3, reps: 15, note: "Full range of motion over the ball", muscles: "Upper Abs · Core", subs: ["Hanging Knee Raises", "Ab Wheel Rollouts"] },
+    { name: "Russian Twists", sets: 3, reps: "15 each side", note: "Feet off floor for extra challenge, rotate fully", muscles: "Obliques · Core", subs: ["Cable Woodchops", "Dead Bug"] },
+    { name: "Side Plank", sets: 3, duration: "25 sec each side", note: "Stack feet or stagger them, hips stay lifted", muscles: "Obliques · Hip Abductors", subs: ["Plank", "Cable Pallof Press"] },
+    { name: "Lying Leg Raises", sets: 3, reps: 12, note: "Lower back pressed to floor, control the descent", muscles: "Lower Abs · Hip Flexors", subs: ["Hanging Knee Raises", "Dead Bug"] },
+    { name: "Mountain Climbers", sets: 3, duration: "30 sec", note: "Drive knees to chest alternately, keep hips level", muscles: "Core · Shoulders · Hip Flexors", subs: ["Plank", "Bird Dog"] },
+    { name: "Superman Hold", sets: 3, reps: 10, note: "Lift arms and legs simultaneously, 2 sec pause at top", muscles: "Lower Back · Glutes · Core", subs: ["Bird Dog", "Dead Bug"] },
   ],
   strength: [
     { name: "Goblet Squat", sets: 3, reps: 12, note: "Dumbbell at chest, sit into your hips", muscles: "Quads · Glutes · Core", subs: ["Leg Press", "Dumbbell Lunges"] },
@@ -35,16 +40,18 @@ const WORKOUTS = {
     { name: "Dumbbell Lunges", sets: 3, reps: "10 each leg", note: "Keep front knee over ankle", muscles: "Quads · Glutes · Balance", subs: ["Goblet Squat", "Leg Press"] },
     { name: "Incline Dumbbell Press", sets: 3, reps: 12, note: "30–45° incline, neutral wrist", muscles: "Upper Chest · Front Delt · Triceps", subs: ["Chest Press Machine", "Dumbbell Shoulder Press"] },
     { name: "Face Pulls", sets: 3, reps: 15, note: "Pull to forehead level, great for posture", muscles: "Rear Delt · Rotator Cuff · Traps", subs: ["Seated Cable Row", "Lat Pulldown"] },
+    { name: "Pec Deck", sets: 3, reps: 12, note: "Keep slight bend in elbows, squeeze hard at center", muscles: "Chest · Front Delt", subs: ["Chest Press Machine", "Incline Dumbbell Press"] },
+    { name: "Dumbbell Lateral Raise", sets: 3, reps: 12, note: "Lead with elbows, stop at shoulder height", muscles: "Shoulders · Traps", subs: ["Dumbbell Shoulder Press", "Face Pulls"] },
+    { name: "Leg Extension Machine", sets: 3, reps: 12, note: "Full extension at top, slow on the way down", muscles: "Quads", subs: ["Goblet Squat", "Leg Press"] },
+    { name: "Leg Curl Machine", sets: 3, reps: 12, note: "Full range, control the negative", muscles: "Hamstrings", subs: ["Dumbbell Romanian Deadlift", "Leg Press"] },
+    { name: "Dumbbell Single-Arm Row", sets: 3, reps: "10 each side", note: "Support on bench, drive elbow to hip", muscles: "Mid Back · Biceps", subs: ["Seated Cable Row", "Lat Pulldown"] },
+    { name: "Assisted Pull-Up Machine", sets: 3, reps: 10, note: "Full hang at bottom, chin over bar at top", muscles: "Lats · Biceps · Core", subs: ["Lat Pulldown", "Seated Cable Row"] },
+    { name: "Dumbbell Hammer Curls", sets: 3, reps: 12, note: "Neutral grip, control both ways", muscles: "Biceps · Forearms", subs: ["Dumbbell Bicep Curls", "Seated Cable Row"] },
   ],
 };
 
 const byName = {};
 Object.values(WORKOUTS).flat().forEach(e => { byName[e.name] = e; });
-
-function pick(arr, n, exclude = []) {
-  const available = arr.filter(e => !exclude.includes(e.name));
-  return [...available].sort(() => Math.random() - 0.5).slice(0, n);
-}
 
 const AVOID_KEYWORDS = {
   legs:      ["Legs", "Quads", "Glutes", "Hamstrings", "Calves"],
@@ -52,23 +59,42 @@ const AVOID_KEYWORDS = {
   shoulders: ["Shoulder", "Tricep", "Bicep", "Delt", "Trap"],
 };
 
-function generateRoutine(checkin = null) {
-  let cardioPool   = [...WORKOUTS.cardio];
-  let strengthPool = [...WORKOUTS.strength];
-  let corePool     = [...WORKOUTS.core];
+// Weighted random pick — exercises not in recentNames are 3× more likely to be chosen
+function weightedPick(arr, n, recentNames = new Set()) {
+  const weighted = arr.flatMap(ex => Array(recentNames.has(ex.name) ? 1 : 3).fill(ex));
+  const shuffled = [...weighted].sort(() => Math.random() - 0.5);
+  const seen = new Set();
+  const result = [];
+  for (const ex of shuffled) {
+    if (!seen.has(ex.name)) { seen.add(ex.name); result.push(ex); }
+    if (result.length === n) break;
+  }
+  return result;
+}
+
+function buildRecentNames(history, n = 4) {
+  const recent = new Set();
+  history.slice(-n).forEach(entry => entry.exercises?.forEach(ex => recent.add(ex.name)));
+  return recent;
+}
+
+function generateRoutine(checkin = null, blocked = new Set(), recentNames = new Set()) {
+  let cardioPool   = WORKOUTS.cardio.filter(ex => !blocked.has(ex.name));
+  let strengthPool = WORKOUTS.strength.filter(ex => !blocked.has(ex.name));
+  let corePool     = WORKOUTS.core.filter(ex => !blocked.has(ex.name));
 
   if (checkin?.avoidMuscles?.length > 0) {
     const excluded = checkin.avoidMuscles.flatMap(g => AVOID_KEYWORDS[g] || []);
     const ok = ex => !excluded.some(kw => ex.muscles.includes(kw));
-    const fc = cardioPool.filter(ok);   if (fc.length  >= 1) cardioPool   = fc;
-    const fs = strengthPool.filter(ok); if (fs.length  >= 3) strengthPool = fs;
-    const fco = corePool.filter(ok);    if (fco.length >= 2) corePool     = fco;
+    const fc  = cardioPool.filter(ok);   if (fc.length  >= 1) cardioPool   = fc;
+    const fs  = strengthPool.filter(ok); if (fs.length  >= 3) strengthPool = fs;
+    const fco = corePool.filter(ok);     if (fco.length >= 2) corePool     = fco;
   }
 
   return {
-    cardio:   checkin?.cardioDone ? [] : pick(cardioPool, 1),
-    strength: pick(strengthPool, checkin?.energy === "low" ? 3 : 4),
-    core:     pick(corePool, 2),
+    cardio:   checkin?.cardioDone ? [] : weightedPick(cardioPool, 1, recentNames),
+    strength: weightedPick(strengthPool, checkin?.energy === "low" ? 3 : 4, recentNames),
+    core:     weightedPick(corePool, 2, recentNames),
   };
 }
 
@@ -120,14 +146,12 @@ const METRIC_PLACEHOLDER = {
   core:     "Weight used (e.g. 15 lbs)",
 };
 
-// Only show a metric input for exercises where tracking a number makes sense
 function showMetricInput(exercise, category) {
   if (category === "strength" || category === "cardio") return true;
   if (category === "core" && exercise.name.includes("Cable")) return true;
   return false;
 }
 
-// Walk history newest-first and grab the last recorded metric per exercise name
 function buildLastMetrics(history) {
   const last = {};
   [...history].reverse().forEach(entry => {
@@ -363,7 +387,7 @@ function HistoryScreen({ history, loading }) {
 }
 
 // ── Picker Sheet ─────────────────────────────────────────────────────────────
-function PickerSheet({ category, currentName, onSelect, onClose }) {
+function PickerSheet({ category, currentName, onSelect, onClose, blockedExercises, onToggleBlock, neverUsedSet, showNewBadge }) {
   const meta = CATEGORY_META[category];
   const current = byName[currentName];
   const suggestedNames = current?.subs || [];
@@ -373,14 +397,25 @@ function PickerSheet({ category, currentName, onSelect, onClose }) {
 
   const Row = ({ ex, badge }) => {
     const isCurrent = ex.name === currentName;
+    const isBlocked = blockedExercises.has(ex.name);
+    const isNew = showNewBadge && neverUsedSet.has(ex.name);
+
+    const handleClick = () => {
+      if (isCurrent) return;
+      if (isBlocked) onToggleBlock(ex.name);
+      onSelect(ex);
+    };
+
     return (
-      <div onClick={() => !isCurrent && onSelect(ex)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 20px", background: isCurrent ? meta.bg : "transparent", borderBottom: "1px solid #F8FAFC", cursor: isCurrent ? "default" : "pointer", opacity: isCurrent ? 0.55 : 1 }}>
-        <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: isCurrent ? meta.color : "#E2E8F0" }} />
+      <div onClick={handleClick} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 20px", background: isCurrent ? meta.bg : "transparent", borderBottom: "1px solid #F8FAFC", cursor: isCurrent ? "default" : "pointer", opacity: isCurrent ? 0.55 : isBlocked ? 0.65 : 1 }}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: isCurrent ? meta.color : isBlocked ? "#F97316" : "#E2E8F0" }} />
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: "#1E293B", fontFamily: "'DM Sans', sans-serif" }}>{ex.name}</span>
             {isCurrent && <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, background: meta.bg, padding: "2px 6px", borderRadius: 10 }}>CURRENT</span>}
-            {badge && !isCurrent && <span style={{ fontSize: 10, fontWeight: 700, color: "#059669", background: "#ECFDF5", padding: "2px 6px", borderRadius: 10 }}>SUGGESTED</span>}
+            {badge && !isCurrent && !isBlocked && <span style={{ fontSize: 10, fontWeight: 700, color: "#059669", background: "#ECFDF5", padding: "2px 6px", borderRadius: 10 }}>SUGGESTED</span>}
+            {isBlocked && <span style={{ fontSize: 10, fontWeight: 700, color: "#F97316", background: "#FFF7ED", padding: "2px 6px", borderRadius: 10 }}>HIDDEN — tap to restore</span>}
+            {isNew && !isBlocked && !isCurrent && <span style={{ fontSize: 10, fontWeight: 700, color: "#D97706", background: "#FFFBEB", padding: "2px 6px", borderRadius: 10 }}>Try it ✦</span>}
           </div>
           <div style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>
             {formatScheme(ex)} · {ex.muscles}
@@ -421,7 +456,7 @@ function PickerSheet({ category, currentName, onSelect, onClose }) {
 }
 
 // ── Exercise Card ─────────────────────────────────────────────────────────────
-function ExerciseCard({ exercise, category, done, onToggle, onSwapRequest, onRemove, metric, lastMetric, onMetricChange }) {
+function ExerciseCard({ exercise, category, done, onToggle, onSwapRequest, onRemove, metric, lastMetric, onMetricChange, isBlocked, onToggleBlock, isNew }) {
   const meta = CATEGORY_META[category];
   const showInput = showMetricInput(exercise, category);
   return (
@@ -431,7 +466,10 @@ function ExerciseCard({ exercise, category, done, onToggle, onSwapRequest, onRem
       </div>
       <div style={{ flex: 1, minWidth: 0, opacity: done ? 0.55 : 1, transition: "opacity 0.2s" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }} onClick={onToggle}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: done ? "#94A3B8" : "#1E293B", fontFamily: "'DM Sans', sans-serif", textDecoration: done ? "line-through" : "none", letterSpacing: "-0.2px" }}>{exercise.name}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", flex: 1 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: done ? "#94A3B8" : "#1E293B", fontFamily: "'DM Sans', sans-serif", textDecoration: done ? "line-through" : "none", letterSpacing: "-0.2px" }}>{exercise.name}</span>
+            {isNew && <span style={{ fontSize: 10, fontWeight: 700, color: "#D97706", background: "#FFFBEB", padding: "2px 6px", borderRadius: 10, border: "1px solid #FDE68A" }}>Try it ✦</span>}
+          </div>
           <span style={{ fontSize: 12, fontWeight: 600, color: meta.color, background: meta.bg, padding: "3px 8px", borderRadius: 20, flexShrink: 0 }}>{formatScheme(exercise)}</span>
         </div>
         <div style={{ margin: "4px 0 3px" }} onClick={onToggle}>
@@ -472,6 +510,13 @@ function ExerciseCard({ exercise, category, done, onToggle, onSwapRequest, onRem
           onMouseEnter={e => { e.currentTarget.style.background = meta.bg; e.currentTarget.style.color = meta.color; }}
           onMouseLeave={e => { e.currentTarget.style.background = "#F1F5F9"; e.currentTarget.style.color = "#94A3B8"; }}
         >↕</button>
+        <button
+          onClick={e => { e.stopPropagation(); onToggleBlock(); }}
+          title={isBlocked ? "Hidden from future routines — click to restore" : "Hide from future routines"}
+          style={{ width: 28, height: 28, borderRadius: 8, background: isBlocked ? "#FFF7ED" : "#F1F5F9", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: isBlocked ? "#F97316" : "#94A3B8", transition: "background 0.15s, color 0.15s" }}
+          onMouseEnter={e => { e.currentTarget.style.background = "#FFF7ED"; e.currentTarget.style.color = "#F97316"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = isBlocked ? "#FFF7ED" : "#F1F5F9"; e.currentTarget.style.color = isBlocked ? "#F97316" : "#94A3B8"; }}
+        >{isBlocked ? "⊕" : "⊖"}</button>
         <button onClick={e => { e.stopPropagation(); onRemove(); }} title="Remove exercise" style={{ width: 28, height: 28, borderRadius: 8, background: "#F1F5F9", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#94A3B8", transition: "background 0.15s, color 0.15s" }}
           onMouseEnter={e => { e.currentTarget.style.background = "#FEF2F2"; e.currentTarget.style.color = "#EF4444"; }}
           onMouseLeave={e => { e.currentTarget.style.background = "#F1F5F9"; e.currentTarget.style.color = "#94A3B8"; }}
@@ -482,9 +527,9 @@ function ExerciseCard({ exercise, category, done, onToggle, onSwapRequest, onRem
 }
 
 // ── Add Sheet ─────────────────────────────────────────────────────────────────
-function AddSheet({ category, currentNames, onAdd, onClose }) {
+function AddSheet({ category, currentNames, onAdd, onClose, blockedExercises, neverUsedSet, showNewBadge }) {
   const meta = CATEGORY_META[category];
-  const available = WORKOUTS[category].filter(ex => !currentNames.includes(ex.name));
+  const available = WORKOUTS[category].filter(ex => !currentNames.includes(ex.name) && !blockedExercises.has(ex.name));
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -503,21 +548,27 @@ function AddSheet({ category, currentNames, onAdd, onClose }) {
             <p style={{ padding: "24px 20px", fontSize: 13, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", textAlign: "center", margin: 0 }}>
               All {meta.label.toLowerCase()} exercises are already in your routine.
             </p>
-          ) : available.map(ex => (
-            <div key={ex.name} onClick={() => onAdd(ex)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 20px", borderBottom: "1px solid #F8FAFC", cursor: "pointer" }}
-              onMouseEnter={e => e.currentTarget.style.background = meta.bg}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: "#E2E8F0" }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#1E293B", fontFamily: "'DM Sans', sans-serif" }}>{ex.name}</div>
-                <div style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>
-                  {formatScheme(ex)} · {ex.muscles}
+          ) : available.map(ex => {
+            const isNew = showNewBadge && neverUsedSet.has(ex.name);
+            return (
+              <div key={ex.name} onClick={() => onAdd(ex)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 20px", borderBottom: "1px solid #F8FAFC", cursor: "pointer" }}
+                onMouseEnter={e => e.currentTarget.style.background = meta.bg}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: "#E2E8F0" }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#1E293B", fontFamily: "'DM Sans', sans-serif" }}>{ex.name}</span>
+                    {isNew && <span style={{ fontSize: 10, fontWeight: 700, color: "#D97706", background: "#FFFBEB", padding: "2px 6px", borderRadius: 10, border: "1px solid #FDE68A" }}>Try it ✦</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>
+                    {formatScheme(ex)} · {ex.muscles}
+                  </div>
                 </div>
+                <span style={{ fontSize: 18, color: meta.color, lineHeight: 1 }}>+</span>
               </div>
-              <span style={{ fontSize: 18, color: meta.color, lineHeight: 1 }}>+</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ padding: "16px 20px 0" }}>
           <button onClick={onClose} style={{ width: "100%", padding: "13px", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
@@ -530,7 +581,7 @@ function AddSheet({ category, currentNames, onAdd, onClose }) {
 }
 
 // ── Section ───────────────────────────────────────────────────────────────────
-function Section({ category, exercises, done, onToggle, onSwap, onRemove, onAddRequest, metrics, lastMetrics, onMetricChange }) {
+function Section({ category, exercises, done, onToggle, onSwap, onRemove, onAddRequest, metrics, lastMetrics, onMetricChange, blockedExercises, neverUsedSet, showNewBadge, onToggleBlock }) {
   const meta = CATEGORY_META[category];
   return (
     <div style={{ marginBottom: 28 }}>
@@ -549,6 +600,9 @@ function Section({ category, exercises, done, onToggle, onSwap, onRemove, onAddR
             metric={metrics[ex.name] || ""}
             lastMetric={lastMetrics[ex.name] || null}
             onMetricChange={val => onMetricChange(ex.name, val)}
+            isBlocked={blockedExercises.has(ex.name)}
+            isNew={showNewBadge && neverUsedSet.has(ex.name)}
+            onToggleBlock={() => onToggleBlock(ex.name)}
           />
         ))}
       </div>
@@ -564,43 +618,43 @@ function Section({ category, exercises, done, onToggle, onSwap, onRemove, onAddR
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser]            = useState(undefined); // undefined = checking, null = logged out
-  const [routine, setRoutine]      = useState(null);
-  const [checked, setChecked]      = useState({});
-  const [sessionCount, setSession] = useState(0);
-  const [animKey, setAnimKey]      = useState(0);
-  const [picker, setPicker]        = useState(null);
-  const [addPicker, setAddPicker]  = useState(null);
-  const [tab, setTab]              = useState("today");
-  const [history, setHistory]      = useState([]);
+  const [user, setUser]                 = useState(undefined);
+  const [routine, setRoutine]           = useState(null);
+  const [checked, setChecked]           = useState({});
+  const [sessionCount, setSession]      = useState(0);
+  const [animKey, setAnimKey]           = useState(0);
+  const [picker, setPicker]             = useState(null);
+  const [addPicker, setAddPicker]       = useState(null);
+  const [tab, setTab]                   = useState("today");
+  const [history, setHistory]           = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [metrics, setMetrics]         = useState({});
-  const [lastMetrics, setLastMetrics] = useState({});
-  const [lastCheckin, setLastCheckin] = useState(null);
+  const [metrics, setMetrics]           = useState({});
+  const [lastMetrics, setLastMetrics]   = useState({});
+  const [lastCheckin, setLastCheckin]   = useState(null);
+  const [blockedExercises, setBlockedExercises] = useState(new Set());
   const initialized = useRef(false);
 
-  // Auth state listener
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => setUser(u ?? null));
     return unsub;
   }, []);
 
-  // Load history from Firestore when user signs in
   useEffect(() => {
-    if (!user) { setHistory([]); return; }
+    if (!user) { setHistory([]); setBlockedExercises(new Set()); return; }
     setHistoryLoading(true);
     const q = query(collection(db, "users", user.uid, "history"), orderBy("id", "asc"));
-    getDocs(q)
-      .then(snap => {
+    const prefsRef = doc(db, "users", user.uid, "preferences", "exercises");
+    Promise.all([getDocs(q), getDoc(prefsRef)])
+      .then(([snap, prefsSnap]) => {
         const entries = snap.docs.map(d => d.data());
         setHistory(entries);
         setLastMetrics(buildLastMetrics(entries));
+        if (prefsSnap.exists()) setBlockedExercises(new Set(prefsSnap.data().blocked || []));
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
   }, [user]);
 
-  // Load current session from localStorage; if nothing saved, show check-in
   useEffect(() => {
     const saved = loadState();
     if (saved?.routine && saved?.checked !== undefined) {
@@ -631,12 +685,28 @@ export default function App() {
     } catch {}
   };
 
+  const toggleBlock = async (exerciseName) => {
+    const next = new Set(blockedExercises);
+    if (next.has(exerciseName)) next.delete(exerciseName); else next.add(exerciseName);
+    setBlockedExercises(next);
+    if (user) {
+      try {
+        await setDoc(doc(db, "users", user.uid, "preferences", "exercises"), { blocked: Array.from(next) });
+      } catch {}
+    }
+  };
+
   const totalEx   = routine ? routine.cardio.length + routine.core.length + routine.strength.length : 0;
   const doneCount = Object.values(checked).filter(Boolean).length;
 
+  // Derived sets for "Try it" badges
+  const usedNames    = new Set(history.flatMap(e => e.exercises?.map(ex => ex.name) || []));
+  const neverUsedSet = new Set(Object.values(WORKOUTS).flat().map(ex => ex.name).filter(n => !usedNames.has(n)));
+  const showNewBadge = history.length >= 2;
+
   const handleCheckinComplete = (checkin) => {
     setLastCheckin(checkin);
-    setRoutine(generateRoutine(checkin));
+    setRoutine(generateRoutine(checkin, blockedExercises, buildRecentNames(history)));
     setAnimKey(k => k + 1);
   };
 
@@ -667,10 +737,7 @@ export default function App() {
   };
 
   const handleAdd = (exercise) => {
-    setRoutine(prev => ({
-      ...prev,
-      [addPicker]: [...prev[addPicker], exercise],
-    }));
+    setRoutine(prev => ({ ...prev, [addPicker]: [...prev[addPicker], exercise] }));
     setAddPicker(null);
   };
 
@@ -682,7 +749,6 @@ export default function App() {
       updated[category] = arr;
       return updated;
     });
-    // Remove the deleted key and shift subsequent indices down by one
     setChecked(prev => {
       const next = {};
       Object.entries(prev).forEach(([key, val]) => {
@@ -712,7 +778,6 @@ export default function App() {
     setPicker(null);
   };
 
-  // Still checking auth state
   if (user === undefined) {
     return (
       <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #F8FAFC 0%, #EFF6FF 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -730,7 +795,6 @@ export default function App() {
 
       <div style={{ maxWidth: 520, margin: "0 auto", padding: "28px 20px 100px" }}>
 
-        {/* Header */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
             <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "1.4px", textTransform: "uppercase", color: "#94A3B8" }}>Baseline · 30–45 min</span>
@@ -742,7 +806,7 @@ export default function App() {
             </div>
           </div>
           <h1 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: 34, fontWeight: 400, color: "#0F172A", lineHeight: 1.15, letterSpacing: "-0.5px" }}>
-            {tab === "today" ? "Today's Workout" : "History"}
+            {tab === "today" ? (routine ? "Today's Workout" : "Quick Check-In") : "History"}
           </h1>
         </div>
 
@@ -773,10 +837,10 @@ export default function App() {
                     </div>
                   )}
                   {routine.cardio.length > 0 && (
-                    <Section category="cardio"   exercises={routine.cardio}   done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("cardio")}   metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
+                    <Section category="cardio" exercises={routine.cardio} done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("cardio")} metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} blockedExercises={blockedExercises} neverUsedSet={neverUsedSet} showNewBadge={showNewBadge} onToggleBlock={toggleBlock} />
                   )}
-                  <Section category="strength" exercises={routine.strength} done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("strength")} metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
-                  <Section category="core"     exercises={routine.core}     done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("core")}     metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} />
+                  <Section category="strength" exercises={routine.strength} done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("strength")} metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} blockedExercises={blockedExercises} neverUsedSet={neverUsedSet} showNewBadge={showNewBadge} onToggleBlock={toggleBlock} />
+                  <Section category="core" exercises={routine.core} done={checked} onToggle={handleToggle} onSwap={(cat, i) => setPicker({ category: cat, index: i })} onRemove={handleRemove} onAddRequest={() => setAddPicker("core")} metrics={metrics} lastMetrics={lastMetrics} onMetricChange={handleMetricChange} blockedExercises={blockedExercises} neverUsedSet={neverUsedSet} showNewBadge={showNewBadge} onToggleBlock={toggleBlock} />
                 </div>
 
                 <div style={{ background: "#FFFBEB", border: "1.5px solid #FDE68A", borderRadius: 14, padding: "14px 18px", marginBottom: 16 }}>
@@ -811,6 +875,9 @@ export default function App() {
           currentNames={routine[addPicker].map(ex => ex.name)}
           onAdd={handleAdd}
           onClose={() => setAddPicker(null)}
+          blockedExercises={blockedExercises}
+          neverUsedSet={neverUsedSet}
+          showNewBadge={showNewBadge}
         />
       )}
 
@@ -820,6 +887,10 @@ export default function App() {
           currentName={routine[picker.category][picker.index].name}
           onSelect={handleSwapSelect}
           onClose={() => setPicker(null)}
+          blockedExercises={blockedExercises}
+          onToggleBlock={toggleBlock}
+          neverUsedSet={neverUsedSet}
+          showNewBadge={showNewBadge}
         />
       )}
     </div>
