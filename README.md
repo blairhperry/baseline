@@ -49,8 +49,11 @@ After a couple of sessions, exercises you've never done surface a **Try it ✦**
 - Log weights, distances, or levels for each exercise
 - **Last time** reminder shows what you logged previously for every movement
 
+### Session notes
+A free-text field at the bottom of every workout — jot down how the session felt, what to adjust, or anything worth remembering. Notes are saved with the history entry and visible when you expand that session later.
+
 ### History
-Every completed session is saved with a full breakdown — exercises, completions, and logged metrics — accessible from any device when signed in.
+History cards are collapsed by default for easy scanning — just the date, completion %, and a one-line check-in summary (timeframe, energy, cardio). Tap any card to expand the full exercise breakdown with logged metrics and session notes.
 
 ---
 

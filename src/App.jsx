@@ -165,7 +165,7 @@ function loadState() {
   } catch { return null; }
 }
 
-function buildEntry(routine, checked, metrics, doneCount, totalCount) {
+function buildEntry(routine, checked, metrics, doneCount, totalCount, notes = "", checkin = null) {
   const exercises = ["cardio", "strength", "core"].flatMap(cat =>
     routine[cat].map((ex, i) => ({
       name: ex.name,
@@ -180,6 +180,8 @@ function buildEntry(routine, checked, metrics, doneCount, totalCount) {
     exercises,
     completedCount: doneCount,
     totalCount,
+    notes: notes.trim(),
+    checkin: checkin ? { energy: checkin.energy, timeframe: checkin.timeframe, cardioDone: checkin.cardioDone } : null,
   };
 }
 
@@ -385,7 +387,11 @@ function TabBar({ tab, onChange, historyCount }) {
 }
 
 // ── History Screen ────────────────────────────────────────────────────────────
+const CHECKIN_ENERGY_LABELS    = { low: "Low energy", good: "Good energy", high: "High energy" };
+
 function HistoryScreen({ history, loading, isGuest, onSignIn }) {
+  const [expandedId, setExpandedId] = useState(null);
+
   if (loading) {
     return (
       <div style={{ textAlign: "center", padding: "60px 20px" }}>
@@ -412,7 +418,7 @@ function HistoryScreen({ history, loading, isGuest, onSignIn }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {isGuest && (
         <div style={{ background: "#F0F9FF", border: "1.5px solid #BAE6FD", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
@@ -423,50 +429,74 @@ function HistoryScreen({ history, loading, isGuest, onSignIn }) {
         </div>
       )}
       {[...history].reverse().map(entry => {
-        const pct = Math.round((entry.completedCount / entry.totalCount) * 100);
-        const allDone = entry.completedCount === entry.totalCount;
+        const isExpanded = expandedId === entry.id;
+        const pct      = Math.round((entry.completedCount / entry.totalCount) * 100);
+        const allDone  = entry.completedCount === entry.totalCount;
+        const checkinParts = entry.checkin ? [
+          entry.checkin.timeframe ? TIMEFRAME_LABELS[entry.checkin.timeframe] : null,
+          entry.checkin.energy    ? CHECKIN_ENERGY_LABELS[entry.checkin.energy] : null,
+          entry.checkin.cardioDone ? "Cardio done" : null,
+        ].filter(Boolean) : [];
+
         return (
           <div key={entry.id} style={{ background: "#FFFFFF", borderRadius: 16, border: "1.5px solid #E2E8F0", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-            <div style={{ padding: "14px 16px 12px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
+            {/* Collapsed header — always visible, tap to expand */}
+            <div onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+              style={{ padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", userSelect: "none" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif" }}>{entry.date}</div>
                 <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 2, fontFamily: "'DM Sans', sans-serif" }}>
-                  {entry.completedCount} of {entry.totalCount} exercises completed
+                  {entry.completedCount} of {entry.totalCount} completed
+                  {checkinParts.length > 0 && <span style={{ color: "#CBD5E1" }}> · {checkinParts.join(" · ")}</span>}
                 </div>
               </div>
-              <div style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: allDone ? "#DCFCE7" : "#F1F5F9", color: allDone ? "#15803D" : "#64748B" }}>
-                {pct}%{allDone ? " ✓" : ""}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: allDone ? "#DCFCE7" : "#F1F5F9", color: allDone ? "#15803D" : "#64748B" }}>
+                  {pct}%{allDone ? " ✓" : ""}
+                </div>
+                <span style={{ fontSize: 11, color: "#CBD5E1" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
             </div>
-            <div style={{ padding: "10px 16px 14px" }}>
-              {["cardio", "strength", "core"].map(cat => {
-                const catExercises = entry.exercises.filter(e => e.category === cat);
-                if (catExercises.length === 0) return null;
-                const meta = CATEGORY_META[cat];
-                return (
-                  <div key={cat} style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: meta.color, fontFamily: "'DM Sans', sans-serif", marginBottom: 5 }}>
-                      {meta.icon} {meta.label}
-                    </div>
-                    {catExercises.map(ex => (
-                      <div key={ex.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-                        <div style={{ width: 18, height: 18, borderRadius: "50%", flexShrink: 0, background: ex.completed ? "#22C55E" : "#F1F5F9", border: `1.5px solid ${ex.completed ? "#22C55E" : "#E2E8F0"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>
-                          {ex.completed ? "✓" : ""}
-                        </div>
-                        <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: ex.completed ? "#1E293B" : "#94A3B8", textDecoration: ex.completed ? "none" : "line-through", flex: 1 }}>
-                          {ex.name}
-                        </span>
-                        {ex.metric && (
-                          <span style={{ fontSize: 11, fontWeight: 600, color: meta.color, background: meta.bg, padding: "2px 7px", borderRadius: 10, fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
-                            {ex.metric}
-                          </span>
-                        )}
+
+            {/* Expanded detail */}
+            {isExpanded && (
+              <div style={{ borderTop: "1px solid #F1F5F9", padding: "12px 16px 16px" }}>
+                {["cardio", "strength", "core"].map(cat => {
+                  const catExercises = entry.exercises.filter(e => e.category === cat);
+                  if (catExercises.length === 0) return null;
+                  const meta = CATEGORY_META[cat];
+                  return (
+                    <div key={cat} style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: meta.color, fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>
+                        {meta.icon} {meta.label}
                       </div>
-                    ))}
+                      {catExercises.map(ex => (
+                        <div key={ex.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+                          <div style={{ width: 18, height: 18, borderRadius: "50%", flexShrink: 0, background: ex.completed ? "#22C55E" : "#F1F5F9", border: `1.5px solid ${ex.completed ? "#22C55E" : "#E2E8F0"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>
+                            {ex.completed ? "✓" : ""}
+                          </div>
+                          <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: ex.completed ? "#1E293B" : "#94A3B8", textDecoration: ex.completed ? "none" : "line-through", flex: 1 }}>
+                            {ex.name}
+                          </span>
+                          {ex.metric && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: meta.color, background: meta.bg, padding: "2px 7px", borderRadius: 10, fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
+                              {ex.metric}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+
+                {entry.notes && (
+                  <div style={{ marginTop: 12, padding: "10px 12px", background: "#F8FAFC", borderRadius: 10, borderLeft: "3px solid #E2E8F0" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginBottom: 5 }}>Session Notes</div>
+                    <p style={{ fontSize: 13, color: "#475569", margin: 0, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif" }}>{entry.notes}</p>
                   </div>
-                );
-              })}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
@@ -806,6 +836,7 @@ export default function App() {
   const [metrics, setMetrics]           = useState({});
   const [lastMetrics, setLastMetrics]   = useState({});
   const [lastCheckin, setLastCheckin]   = useState(null);
+  const [sessionNotes, setSessionNotes] = useState("");
   const [blockedExercises, setBlockedExercises]       = useState(new Set());
   const [defaultTimeframePref, setDefaultTimeframePref] = useState("standard");
   const [showPrefs, setShowPrefs]                     = useState(false);
@@ -860,6 +891,7 @@ export default function App() {
       setChecked(saved.checked);
       setSession(saved.sessionCount || 0);
       setMetrics(saved.metrics || {});
+      setSessionNotes(saved.notes || "");
     }
     initialized.current = true;
   }, []);
@@ -867,12 +899,12 @@ export default function App() {
   useEffect(() => {
     if (!initialized.current) return;
     if (!routine) { try { localStorage.removeItem(STORAGE_KEY); } catch {} return; }
-    saveState({ routine, checked, sessionCount, metrics });
-  }, [routine, checked, sessionCount, metrics]);
+    saveState({ routine, checked, sessionCount, metrics, notes: sessionNotes });
+  }, [routine, checked, sessionCount, metrics, sessionNotes]);
 
-  const commitToHistory = async (currentRoutine, currentChecked, currentMetrics, doneCount, totalCount) => {
+  const commitToHistory = async (currentRoutine, currentChecked, currentMetrics, doneCount, totalCount, notes, checkin) => {
     if (doneCount === 0) return;
-    const entry = buildEntry(currentRoutine, currentChecked, currentMetrics, doneCount, totalCount);
+    const entry = buildEntry(currentRoutine, currentChecked, currentMetrics, doneCount, totalCount, notes, checkin);
     if (user) {
       try { await addDoc(collection(db, "users", user.uid, "history"), entry); } catch {}
     } else {
@@ -934,19 +966,21 @@ export default function App() {
   };
 
   const handleFinish = async () => {
-    await commitToHistory(routine, checked, metrics, doneCount, totalEx);
+    await commitToHistory(routine, checked, metrics, doneCount, totalEx, sessionNotes, lastCheckin);
     setRoutine(null);
     setChecked({});
     setMetrics({});
+    setSessionNotes("");
     setSession(s => s + 1);
     setTab("history");
   };
 
   const handleNew = async () => {
-    await commitToHistory(routine, checked, metrics, doneCount, totalEx);
+    await commitToHistory(routine, checked, metrics, doneCount, totalEx, sessionNotes, lastCheckin);
     setRoutine(null);
     setChecked({});
     setMetrics({});
+    setSessionNotes("");
     setSession(s => s + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -1087,6 +1121,16 @@ export default function App() {
                     <strong>Rest tip:</strong> 45–60 sec between strength sets. Straight through core. 2–3 min between cardio and weights.
                   </p>
                 </div>
+
+                <textarea
+                  value={sessionNotes}
+                  onChange={e => setSessionNotes(e.target.value)}
+                  placeholder="Session notes — how's it feeling? Anything to remember next time…"
+                  rows={3}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1.5px solid #E2E8F0", fontSize: 13, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", background: "#F8FAFC", outline: "none", resize: "none", boxSizing: "border-box", lineHeight: 1.6, marginBottom: 16, transition: "border-color 0.15s" }}
+                  onFocus={e => e.target.style.borderColor = "#94A3B8"}
+                  onBlur={e => e.target.style.borderColor = "#E2E8F0"}
+                />
 
                 {doneCount > 0 && (
                   <button onClick={handleFinish} style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #16A34A 0%, #15803D 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(22,163,74,0.3)", transition: "transform 0.15s, box-shadow 0.15s", marginBottom: 10 }}
