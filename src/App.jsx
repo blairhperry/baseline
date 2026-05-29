@@ -59,9 +59,64 @@ const AVOID_KEYWORDS = {
   shoulders: ["Shoulder", "Tricep", "Bicep", "Delt", "Trap"],
 };
 
-// Weighted random pick — exercises not in recentNames are 3× more likely to be chosen
-function weightedPick(arr, n, recentNames = new Set()) {
-  const weighted = arr.flatMap(ex => Array(recentNames.has(ex.name) ? 1 : 3).fill(ex));
+const TIMEFRAME_COUNTS = {
+  quick:    { strength: 2, core: 1 },
+  standard: { strength: 4, core: 2 },
+  extended: { strength: 6, core: 3 },
+};
+
+const TIMEFRAME_LABELS = { quick: "~20 min", standard: "~35 min", extended: "~50 min" };
+
+const GROUP_META = {
+  "Upper Push": { color: "#0EA5E9", bg: "#F0F9FF" },
+  "Upper Pull": { color: "#8B5CF6", bg: "#F5F3FF" },
+  "Lower Body": { color: "#F97316", bg: "#FFF7ED" },
+  "Core":       { color: "#16A34A", bg: "#F0FDF4" },
+};
+
+function classifyGroups(muscles) {
+  const groups = [];
+  if (/Chest|Tricep|Delt|Shoulder/.test(muscles)) groups.push("Upper Push");
+  if (/Back|Lats|Bicep|Trap/.test(muscles))       groups.push("Upper Pull");
+  if (/Quads|Glutes|Hamstrings|Calves|Legs/.test(muscles)) groups.push("Lower Body");
+  if (/Core|Obliques|Abs/.test(muscles))           groups.push("Core");
+  return groups;
+}
+
+function buildRecentNames(history, n = 4) {
+  const recent = new Set();
+  history.slice(-n).forEach(entry => entry.exercises?.forEach(ex => recent.add(ex.name)));
+  return recent;
+}
+
+function buildGroupRecency(history, n = 3) {
+  const counts = { "Upper Push": 0, "Upper Pull": 0, "Lower Body": 0, "Core": 0 };
+  history.slice(-n).forEach(entry => {
+    const seen = new Set();
+    entry.exercises?.forEach(ex => {
+      const obj = byName[ex.name];
+      if (obj) classifyGroups(obj.muscles).forEach(g => seen.add(g));
+    });
+    seen.forEach(g => { counts[g] = (counts[g] || 0) + 1; });
+  });
+  return counts;
+}
+
+function getRoutineGroups(routine) {
+  const groups = new Set();
+  ["cardio", "strength", "core"].forEach(cat =>
+    routine[cat]?.forEach(ex => classifyGroups(ex.muscles).forEach(g => groups.add(g)))
+  );
+  return [...groups];
+}
+
+// Recency weight (3× for fresh exercises) × group freshness (2× for untrained groups)
+function weightedPick(arr, n, recentNames = new Set(), groupRecency = {}) {
+  const weighted = arr.flatMap(ex => {
+    const recW = recentNames.has(ex.name) ? 1 : 3;
+    const grpW = classifyGroups(ex.muscles).some(g => (groupRecency[g] ?? 0) === 0) ? 2 : 1;
+    return Array(recW * grpW).fill(ex);
+  });
   const shuffled = [...weighted].sort(() => Math.random() - 0.5);
   const seen = new Set();
   const result = [];
@@ -72,13 +127,7 @@ function weightedPick(arr, n, recentNames = new Set()) {
   return result;
 }
 
-function buildRecentNames(history, n = 4) {
-  const recent = new Set();
-  history.slice(-n).forEach(entry => entry.exercises?.forEach(ex => recent.add(ex.name)));
-  return recent;
-}
-
-function generateRoutine(checkin = null, blocked = new Set(), recentNames = new Set()) {
+function generateRoutine(checkin = null, blocked = new Set(), recentNames = new Set(), groupRecency = {}) {
   let cardioPool   = WORKOUTS.cardio.filter(ex => !blocked.has(ex.name));
   let strengthPool = WORKOUTS.strength.filter(ex => !blocked.has(ex.name));
   let corePool     = WORKOUTS.core.filter(ex => !blocked.has(ex.name));
@@ -91,10 +140,13 @@ function generateRoutine(checkin = null, blocked = new Set(), recentNames = new 
     const fco = corePool.filter(ok);     if (fco.length >= 2) corePool     = fco;
   }
 
+  const counts = TIMEFRAME_COUNTS[checkin?.timeframe] || TIMEFRAME_COUNTS.standard;
+  const strengthCount = Math.max(1, counts.strength - (checkin?.energy === "low" ? 1 : 0));
+
   return {
-    cardio:   checkin?.cardioDone ? [] : weightedPick(cardioPool, 1, recentNames),
-    strength: weightedPick(strengthPool, checkin?.energy === "low" ? 3 : 4, recentNames),
-    core:     weightedPick(corePool, 2, recentNames),
+    cardio:   checkin?.cardioDone ? [] : weightedPick(cardioPool, 1, recentNames, groupRecency),
+    strength: weightedPick(strengthPool, strengthCount, recentNames, groupRecency),
+    core:     weightedPick(corePool, counts.core, recentNames, groupRecency),
   };
 }
 
@@ -165,6 +217,7 @@ function buildLastMetrics(history) {
 // ── Check-In Screen ───────────────────────────────────────────────────────────
 function CheckIn({ onComplete }) {
   const [energy, setEnergy]             = useState("good");
+  const [timeframe, setTimeframe]       = useState("standard");
   const [cardioDone, setCardioDone]     = useState(false);
   const [avoidMuscles, setAvoidMuscles] = useState([]);
 
@@ -212,6 +265,24 @@ function CheckIn({ onComplete }) {
       </div>
 
       <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", marginBottom: 10 }}>How long do you have?</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[
+            { key: "quick",    icon: "⚡", label: "Quick",    sub: "~20 min" },
+            { key: "standard", icon: "💪", label: "Standard", sub: "~35 min" },
+            { key: "extended", icon: "🔥", label: "Extended", sub: "~50 min" },
+          ].map(opt => (
+            <button key={opt.key} onClick={() => setTimeframe(opt.key)}
+              style={{ ...chip(timeframe === opt.key), flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 8px" }}>
+              <span style={{ fontSize: 22 }}>{opt.icon}</span>
+              <span>{opt.label}</span>
+              <span style={{ fontSize: 10, fontWeight: 400, color: timeframe === opt.key ? "#0EA5E9" : "#94A3B8" }}>{opt.sub}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", marginBottom: 10 }}>Any cardio already today?</div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setCardioDone(false)} style={{ ...chip(!cardioDone), flex: 1, padding: "10px 0" }}>Nope</button>
@@ -235,7 +306,7 @@ function CheckIn({ onComplete }) {
       </div>
 
       <button
-        onClick={() => onComplete({ energy, cardioDone, avoidMuscles })}
+        onClick={() => onComplete({ energy, timeframe, cardioDone, avoidMuscles })}
         style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #1E293B 0%, #334155 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", transition: "transform 0.15s, box-shadow 0.15s" }}
         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(15,23,42,0.3)"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(15,23,42,0.25)"; }}
@@ -706,7 +777,7 @@ export default function App() {
 
   const handleCheckinComplete = (checkin) => {
     setLastCheckin(checkin);
-    setRoutine(generateRoutine(checkin, blockedExercises, buildRecentNames(history)));
+    setRoutine(generateRoutine(checkin, blockedExercises, buildRecentNames(history), buildGroupRecency(history)));
     setAnimKey(k => k + 1);
   };
 
@@ -797,7 +868,9 @@ export default function App() {
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "1.4px", textTransform: "uppercase", color: "#94A3B8" }}>Baseline · 30–45 min</span>
+            <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "1.4px", textTransform: "uppercase", color: "#94A3B8" }}>
+              Baseline · {lastCheckin?.timeframe ? TIMEFRAME_LABELS[lastCheckin.timeframe] : "30–45 min"}
+            </span>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 24, height: 24, borderRadius: "50%", border: "1.5px solid #E2E8F0" }} />}
               <button onClick={() => signOut(auth)} style={{ fontSize: 12, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", padding: 0, fontWeight: 500 }}>
@@ -828,6 +901,13 @@ export default function App() {
                   <div style={{ height: 6, background: "#E2E8F0", borderRadius: 10, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${totalEx > 0 ? (doneCount / totalEx) * 100 : 0}%`, background: doneCount === totalEx && totalEx > 0 ? "#22C55E" : "linear-gradient(90deg, #0EA5E9, #8B5CF6)", borderRadius: 10, transition: "width 0.4s ease" }} />
                   </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
+                  {getRoutineGroups(routine).map(group => {
+                    const m = GROUP_META[group];
+                    return <span key={group} style={{ fontSize: 11, fontWeight: 700, color: m.color, background: m.bg, padding: "3px 10px", borderRadius: 20, fontFamily: "'DM Sans', sans-serif" }}>{group}</span>;
+                  })}
                 </div>
 
                 <div key={animKey} style={{ animation: "fadeUp 0.35s ease both" }}>
