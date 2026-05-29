@@ -153,6 +153,7 @@ function generateRoutine(checkin = null, blocked = new Set(), recentNames = new 
 const STORAGE_KEY       = "ymca_workout_v1";
 const GUEST_HISTORY_KEY = "ymca_guest_history_v1";
 const GUEST_BLOCKED_KEY = "ymca_guest_blocked_v1";
+const GUEST_PREFS_KEY   = "ymca_guest_prefs_v1";
 
 function saveState(state) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
@@ -217,9 +218,9 @@ function buildLastMetrics(history) {
 }
 
 // ── Check-In Screen ───────────────────────────────────────────────────────────
-function CheckIn({ onComplete }) {
+function CheckIn({ onComplete, defaultTimeframe }) {
   const [energy, setEnergy]             = useState("good");
-  const [timeframe, setTimeframe]       = useState("standard");
+  const [timeframe, setTimeframe]       = useState(defaultTimeframe || "standard");
   const [cardioDone, setCardioDone]     = useState(false);
   const [avoidMuscles, setAvoidMuscles] = useState([]);
 
@@ -667,6 +668,93 @@ function AddSheet({ category, currentNames, onAdd, onClose, blockedExercises, ne
   );
 }
 
+// ── Preferences Sheet ─────────────────────────────────────────────────────────
+function PrefsSheet({ onClose, blockedExercises, onToggleBlock, defaultTimeframe, onSetDefaultTimeframe }) {
+  const blockedByCategory = ["cardio", "strength", "core"]
+    .map(cat => ({ cat, meta: CATEGORY_META[cat], exercises: WORKOUTS[cat].filter(ex => blockedExercises.has(ex.name)) }))
+    .filter(g => g.exercises.length > 0);
+  const totalBlocked = blockedExercises.size;
+
+  const chip = selected => ({
+    borderRadius: 10, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+    fontSize: 13, fontWeight: 600, transition: "all 0.15s",
+    border: `1.5px solid ${selected ? "#0EA5E9" : "#E2E8F0"}`,
+    background: selected ? "#F0F9FF" : "#FFFFFF",
+    color: selected ? "#0EA5E9" : "#64748B",
+  });
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "#FFFFFF", borderRadius: "22px 22px 0 0", padding: "20px 0 40px", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)", animation: "slideUp 0.25s ease" }}>
+        <div style={{ width: 40, height: 4, background: "#E2E8F0", borderRadius: 2, margin: "0 auto 18px" }} />
+        <div style={{ padding: "0 20px 14px", borderBottom: "1px solid #F1F5F9" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Serif Display', serif" }}>Preferences</span>
+        </div>
+
+        <div style={{ overflowY: "auto", maxHeight: "65vh" }}>
+          {/* Default Timeframe */}
+          <div style={{ padding: "18px 20px 20px", borderBottom: "1px solid #F1F5F9" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>Default Timeframe</div>
+            <p style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", margin: "0 0 12px", lineHeight: 1.5 }}>
+              Pre-selects your timeframe at check-in. You can always override it on the day.
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[
+                { key: "quick",    icon: "⚡", label: "Quick",    sub: "~20 min" },
+                { key: "standard", icon: "💪", label: "Standard", sub: "~35 min" },
+                { key: "extended", icon: "🔥", label: "Extended", sub: "~50 min" },
+              ].map(opt => (
+                <button key={opt.key} onClick={() => onSetDefaultTimeframe(opt.key)}
+                  style={{ ...chip(defaultTimeframe === opt.key), flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 8px" }}>
+                  <span style={{ fontSize: 20 }}>{opt.icon}</span>
+                  <span>{opt.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, color: defaultTimeframe === opt.key ? "#0EA5E9" : "#94A3B8" }}>{opt.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Hidden Exercises */}
+          <div style={{ padding: "18px 20px 0" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>
+              Hidden Exercises{totalBlocked > 0 ? ` (${totalBlocked})` : ""}
+            </div>
+            {totalBlocked === 0 ? (
+              <p style={{ fontSize: 13, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", margin: 0, lineHeight: 1.5 }}>
+                No hidden exercises. Tap ⊖ on any exercise card to hide it from future routines.
+              </p>
+            ) : (
+              blockedByCategory.map(({ cat, meta, exercises }) => (
+                <div key={cat} style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: meta.color, fontFamily: "'DM Sans', sans-serif", marginBottom: 8 }}>
+                    {meta.icon} {meta.label}
+                  </div>
+                  {exercises.map(ex => (
+                    <div key={ex.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0", borderBottom: "1px solid #F8FAFC" }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#1E293B", fontFamily: "'DM Sans', sans-serif" }}>{ex.name}</div>
+                        <div style={{ fontSize: 11, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>{ex.muscles}</div>
+                      </div>
+                      <button onClick={() => onToggleBlock(ex.name)}
+                        style={{ padding: "6px 14px", borderRadius: 8, background: "#F0FDF4", border: "1.5px solid #BBF7D0", color: "#15803D", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div style={{ padding: "16px 20px 0" }}>
+          <button onClick={onClose} style={{ width: "100%", padding: "13px", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Section ───────────────────────────────────────────────────────────────────
 function Section({ category, exercises, done, onToggle, onSwap, onRemove, onAddRequest, metrics, lastMetrics, onMetricChange, blockedExercises, neverUsedSet, showNewBadge, onToggleBlock }) {
   const meta = CATEGORY_META[category];
@@ -718,7 +806,9 @@ export default function App() {
   const [metrics, setMetrics]           = useState({});
   const [lastMetrics, setLastMetrics]   = useState({});
   const [lastCheckin, setLastCheckin]   = useState(null);
-  const [blockedExercises, setBlockedExercises] = useState(new Set());
+  const [blockedExercises, setBlockedExercises]       = useState(new Set());
+  const [defaultTimeframePref, setDefaultTimeframePref] = useState("standard");
+  const [showPrefs, setShowPrefs]                     = useState(false);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -739,6 +829,11 @@ export default function App() {
         const raw = localStorage.getItem(GUEST_BLOCKED_KEY);
         setBlockedExercises(new Set(raw ? JSON.parse(raw) : []));
       } catch {}
+      try {
+        const raw = localStorage.getItem(GUEST_PREFS_KEY);
+        const prefs = raw ? JSON.parse(raw) : {};
+        setDefaultTimeframePref(prefs.defaultTimeframe || "standard");
+      } catch {}
       return;
     }
     setHistoryLoading(true);
@@ -749,7 +844,10 @@ export default function App() {
         const entries = snap.docs.map(d => d.data());
         setHistory(entries);
         setLastMetrics(buildLastMetrics(entries));
-        if (prefsSnap.exists()) setBlockedExercises(new Set(prefsSnap.data().blocked || []));
+        if (prefsSnap.exists()) {
+          setBlockedExercises(new Set(prefsSnap.data().blocked || []));
+          setDefaultTimeframePref(prefsSnap.data().defaultTimeframe || "standard");
+        }
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
@@ -796,10 +894,24 @@ export default function App() {
     setBlockedExercises(next);
     if (user) {
       try {
-        await setDoc(doc(db, "users", user.uid, "preferences", "exercises"), { blocked: Array.from(next) });
+        await setDoc(doc(db, "users", user.uid, "preferences", "exercises"), { blocked: Array.from(next) }, { merge: true });
       } catch {}
     } else {
       try { localStorage.setItem(GUEST_BLOCKED_KEY, JSON.stringify(Array.from(next))); } catch {}
+    }
+  };
+
+  const handleSetDefaultTimeframe = async (tf) => {
+    setDefaultTimeframePref(tf);
+    if (user) {
+      try {
+        await setDoc(doc(db, "users", user.uid, "preferences", "exercises"), { defaultTimeframe: tf }, { merge: true });
+      } catch {}
+    } else {
+      try {
+        const existing = JSON.parse(localStorage.getItem(GUEST_PREFS_KEY) || "{}");
+        localStorage.setItem(GUEST_PREFS_KEY, JSON.stringify({ ...existing, defaultTimeframe: tf }));
+      } catch {}
     }
   };
 
@@ -909,7 +1021,12 @@ export default function App() {
             <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "1.4px", textTransform: "uppercase", color: "#94A3B8" }}>
               Baseline · {lastCheckin?.timeframe ? TIMEFRAME_LABELS[lastCheckin.timeframe] : "30–45 min"}
             </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setShowPrefs(true)} title="Preferences"
+                style={{ width: 28, height: 28, borderRadius: 8, background: "#F1F5F9", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#64748B", transition: "background 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#E2E8F0"}
+                onMouseLeave={e => e.currentTarget.style.background = "#F1F5F9"}
+              >⚙</button>
               {user ? (
                 <>
                   {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 24, height: 24, borderRadius: "50%", border: "1.5px solid #E2E8F0" }} />}
@@ -930,7 +1047,7 @@ export default function App() {
         {tab === "today" && (
           <>
             {!routine ? (
-              <CheckIn onComplete={handleCheckinComplete} />
+              <CheckIn onComplete={handleCheckinComplete} defaultTimeframe={defaultTimeframePref} />
             ) : (
               <>
                 <div style={{ marginBottom: 28 }}>
@@ -1002,6 +1119,16 @@ export default function App() {
           blockedExercises={blockedExercises}
           neverUsedSet={neverUsedSet}
           showNewBadge={showNewBadge}
+        />
+      )}
+
+      {showPrefs && (
+        <PrefsSheet
+          onClose={() => setShowPrefs(false)}
+          blockedExercises={blockedExercises}
+          onToggleBlock={toggleBlock}
+          defaultTimeframe={defaultTimeframePref}
+          onSetDefaultTimeframe={handleSetDefaultTimeframe}
         />
       )}
 

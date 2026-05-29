@@ -31,8 +31,13 @@ Two layers of intelligence work together to keep routines fresh:
 
 A **Today's focus** chip row shows which muscle groups (Upper Push, Upper Pull, Lower Body, Core) the generated routine covers at a glance.
 
+### Preferences ⚙
+A gear icon in the header opens a preferences panel with two settings:
+- **Default Timeframe** — set your usual session length so it pre-selects at check-in every day. Still overridable any day you need to.
+- **Hidden Exercises** — see everything you've blocked, grouped by category, with a one-tap Restore button for each.
+
 ### Per-user exercise blocking
-Hide exercises you can't do at your gym. Tap **⊖** on any card to remove it from future routines — it's saved to your account and works across devices. Tap **⊕** to restore it, or find it in the swap picker and tap to unblock and use it in one step.
+Tap **⊖** on any exercise card to hide it from future routines — saved to your account and synced across devices. Restore it any time from Preferences, tap **⊕** on the card, or find it in the swap picker and tap to unblock and use it in one step.
 
 ### Try it ✦
 After a couple of sessions, exercises you've never done surface a **Try it ✦** badge on the card, in the swap picker, and in the add sheet — a gentle nudge to expand your repertoire.
