@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import { collection, addDoc, getDocs, orderBy, query, doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, orderBy, query, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
 const WORKOUTS = {
@@ -387,10 +387,37 @@ function TabBar({ tab, onChange, historyCount }) {
 }
 
 // ── History Screen ────────────────────────────────────────────────────────────
-const CHECKIN_ENERGY_LABELS    = { low: "Low energy", good: "Good energy", high: "High energy" };
+const CHECKIN_ENERGY_LABELS = { low: "Low energy", good: "Good energy", high: "High energy" };
 
-function HistoryScreen({ history, loading, isGuest, onSignIn }) {
+function HistoryScreen({ history, loading, isGuest, onSignIn, onUpdateEntry }) {
   const [expandedId, setExpandedId] = useState(null);
+  const [editingId, setEditingId]   = useState(null);
+  const [editDraft, setEditDraft]   = useState(null);
+
+  const startEdit = (entry, e) => {
+    e.stopPropagation();
+    setExpandedId(entry.id);
+    setEditingId(entry.id);
+    setEditDraft({ ...entry, exercises: entry.exercises.map(ex => ({ ...ex })) });
+  };
+
+  const cancelEdit = () => { setEditingId(null); setEditDraft(null); };
+
+  const toggleDraftEx = (index) => {
+    setEditDraft(prev => {
+      const exercises = prev.exercises.map((ex, i) => i === index ? { ...ex, completed: !ex.completed } : ex);
+      return { ...prev, exercises, completedCount: exercises.filter(e => e.completed).length };
+    });
+  };
+
+  const removeDraftEx = (index) => {
+    setEditDraft(prev => {
+      const exercises = prev.exercises.filter((_, i) => i !== index);
+      return { ...prev, exercises, completedCount: exercises.filter(e => e.completed).length, totalCount: exercises.length };
+    });
+  };
+
+  const saveEdit = () => { onUpdateEntry(editDraft); setEditingId(null); setEditDraft(null); };
 
   if (loading) {
     return (
@@ -430,39 +457,49 @@ function HistoryScreen({ history, loading, isGuest, onSignIn }) {
       )}
       {[...history].reverse().map(entry => {
         const isExpanded = expandedId === entry.id;
-        const pct      = Math.round((entry.completedCount / entry.totalCount) * 100);
-        const allDone  = entry.completedCount === entry.totalCount;
+        const isEditing  = editingId === entry.id;
+        const display    = isEditing ? editDraft : entry;
+        const pct        = display.totalCount > 0 ? Math.round((display.completedCount / display.totalCount) * 100) : 0;
+        const allDone    = display.totalCount > 0 && display.completedCount === display.totalCount;
         const checkinParts = entry.checkin ? [
-          entry.checkin.timeframe ? TIMEFRAME_LABELS[entry.checkin.timeframe] : null,
-          entry.checkin.energy    ? CHECKIN_ENERGY_LABELS[entry.checkin.energy] : null,
-          entry.checkin.cardioDone ? "Cardio done" : null,
+          entry.checkin.timeframe  ? TIMEFRAME_LABELS[entry.checkin.timeframe]       : null,
+          entry.checkin.energy     ? CHECKIN_ENERGY_LABELS[entry.checkin.energy]     : null,
+          entry.checkin.cardioDone ? "Cardio done"                                   : null,
         ].filter(Boolean) : [];
 
         return (
-          <div key={entry.id} style={{ background: "#FFFFFF", borderRadius: 16, border: "1.5px solid #E2E8F0", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-            {/* Collapsed header — always visible, tap to expand */}
-            <div onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-              style={{ padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", userSelect: "none" }}>
+          <div key={entry.id} style={{ background: "#FFFFFF", borderRadius: 16, border: `1.5px solid ${isEditing ? "#BAE6FD" : "#E2E8F0"}`, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", transition: "border-color 0.2s" }}>
+            {/* Header */}
+            <div onClick={() => !isEditing && setExpandedId(isExpanded ? null : entry.id)}
+              style={{ padding: "14px 16px", cursor: isEditing ? "default" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", userSelect: "none" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif" }}>{entry.date}</div>
                 <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 2, fontFamily: "'DM Sans', sans-serif" }}>
-                  {entry.completedCount} of {entry.totalCount} completed
+                  {display.completedCount} of {display.totalCount} completed
                   {checkinParts.length > 0 && <span style={{ color: "#CBD5E1" }}> · {checkinParts.join(" · ")}</span>}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: allDone ? "#DCFCE7" : "#F1F5F9", color: allDone ? "#15803D" : "#64748B" }}>
+                {isExpanded && !isEditing && (
+                  <button onClick={e => startEdit(entry, e)}
+                    style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", padding: "2px 4px" }}>
+                    Edit
+                  </button>
+                )}
+                <div style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: allDone ? "#DCFCE7" : "#F1F5F9", color: allDone ? "#15803D" : "#64748B", transition: "all 0.2s" }}>
                   {pct}%{allDone ? " ✓" : ""}
                 </div>
-                <span style={{ fontSize: 11, color: "#CBD5E1" }}>{isExpanded ? "▲" : "▼"}</span>
+                {!isEditing && <span style={{ fontSize: 11, color: "#CBD5E1" }}>{isExpanded ? "▲" : "▼"}</span>}
               </div>
             </div>
 
-            {/* Expanded detail */}
+            {/* Expanded / edit content */}
             {isExpanded && (
               <div style={{ borderTop: "1px solid #F1F5F9", padding: "12px 16px 16px" }}>
                 {["cardio", "strength", "core"].map(cat => {
-                  const catExercises = entry.exercises.filter(e => e.category === cat);
+                  const catExercises = display.exercises
+                    .map((ex, i) => ({ ...ex, _i: i }))
+                    .filter(ex => ex.category === cat);
                   if (catExercises.length === 0) return null;
                   const meta = CATEGORY_META[cat];
                   return (
@@ -471,8 +508,10 @@ function HistoryScreen({ history, loading, isGuest, onSignIn }) {
                         {meta.icon} {meta.label}
                       </div>
                       {catExercises.map(ex => (
-                        <div key={ex.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-                          <div style={{ width: 18, height: 18, borderRadius: "50%", flexShrink: 0, background: ex.completed ? "#22C55E" : "#F1F5F9", border: `1.5px solid ${ex.completed ? "#22C55E" : "#E2E8F0"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>
+                        <div key={ex.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0" }}>
+                          <div
+                            onClick={() => isEditing && toggleDraftEx(ex._i)}
+                            style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, background: ex.completed ? "#22C55E" : "transparent", border: `2px solid ${ex.completed ? "#22C55E" : "#CBD5E1"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700, cursor: isEditing ? "pointer" : "default", transition: "all 0.15s" }}>
                             {ex.completed ? "✓" : ""}
                           </div>
                           <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: ex.completed ? "#1E293B" : "#94A3B8", textDecoration: ex.completed ? "none" : "line-through", flex: 1 }}>
@@ -483,16 +522,48 @@ function HistoryScreen({ history, loading, isGuest, onSignIn }) {
                               {ex.metric}
                             </span>
                           )}
+                          {isEditing && (
+                            <button onClick={() => removeDraftEx(ex._i)}
+                              style={{ width: 22, height: 22, borderRadius: 6, background: "#FEF2F2", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#EF4444", flexShrink: 0 }}>✕</button>
+                          )}
                         </div>
                       ))}
                     </div>
                   );
                 })}
 
-                {entry.notes && (
+                {/* Notes — editable in edit mode */}
+                {isEditing ? (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>Session Notes</div>
+                    <textarea
+                      value={editDraft.notes || ""}
+                      onChange={e => setEditDraft(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Add notes…"
+                      rows={3}
+                      style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #E2E8F0", fontSize: 13, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", background: "#F8FAFC", outline: "none", resize: "none", boxSizing: "border-box", lineHeight: 1.5, transition: "border-color 0.15s" }}
+                      onFocus={e => e.target.style.borderColor = "#94A3B8"}
+                      onBlur={e => e.target.style.borderColor = "#E2E8F0"}
+                    />
+                  </div>
+                ) : entry.notes ? (
                   <div style={{ marginTop: 12, padding: "10px 12px", background: "#F8FAFC", borderRadius: 10, borderLeft: "3px solid #E2E8F0" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginBottom: 5 }}>Session Notes</div>
                     <p style={{ fontSize: 13, color: "#475569", margin: 0, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif" }}>{entry.notes}</p>
+                  </div>
+                ) : null}
+
+                {/* Edit actions */}
+                {isEditing && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                    <button onClick={cancelEdit}
+                      style={{ flex: 1, padding: "10px", borderRadius: 10, background: "#F1F5F9", color: "#64748B", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                      Cancel
+                    </button>
+                    <button onClick={saveEdit}
+                      style={{ flex: 2, padding: "10px", borderRadius: 10, background: "linear-gradient(135deg, #1E293B 0%, #334155 100%)", color: "#FFFFFF", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                      Save changes
+                    </button>
                   </div>
                 )}
               </div>
@@ -872,7 +943,7 @@ export default function App() {
     const prefsRef = doc(db, "users", user.uid, "preferences", "exercises");
     Promise.all([getDocs(q), getDoc(prefsRef)])
       .then(([snap, prefsSnap]) => {
-        const entries = snap.docs.map(d => d.data());
+        const entries = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
         setHistory(entries);
         setLastMetrics(buildLastMetrics(entries));
         if (prefsSnap.exists()) {
@@ -906,18 +977,19 @@ export default function App() {
     if (doneCount === 0) return;
     const entry = buildEntry(currentRoutine, currentChecked, currentMetrics, doneCount, totalCount, notes, checkin);
     if (user) {
-      try { await addDoc(collection(db, "users", user.uid, "history"), entry); } catch {}
+      try {
+        const docRef = await addDoc(collection(db, "users", user.uid, "history"), entry);
+        const stored = { ...entry, _docId: docRef.id };
+        setHistory(prev => { const next = [...prev, stored]; setLastMetrics(buildLastMetrics(next)); return next; });
+        return;
+      } catch {}
     } else {
       try {
         const existing = JSON.parse(localStorage.getItem(GUEST_HISTORY_KEY) || "[]");
         localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify([...existing, entry]));
       } catch {}
     }
-    setHistory(prev => {
-      const next = [...prev, entry];
-      setLastMetrics(buildLastMetrics(next));
-      return next;
-    });
+    setHistory(prev => { const next = [...prev, entry]; setLastMetrics(buildLastMetrics(next)); return next; });
   };
 
   const toggleBlock = async (exerciseName) => {
@@ -949,6 +1021,23 @@ export default function App() {
 
   const handleSignIn = async () => {
     try { await signInWithPopup(auth, googleProvider); } catch {}
+  };
+
+  const handleUpdateEntry = async (updatedEntry) => {
+    setHistory(prev => {
+      const next = prev.map(e => e.id === updatedEntry.id ? updatedEntry : e);
+      setLastMetrics(buildLastMetrics(next));
+      if (!user) {
+        try { localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+    if (user && updatedEntry._docId) {
+      try {
+        const { _docId, ...data } = updatedEntry;
+        await updateDoc(doc(db, "users", user.uid, "history", _docId), data);
+      } catch {}
+    }
   };
 
   const totalEx   = routine ? routine.cardio.length + routine.core.length + routine.strength.length : 0;
@@ -1151,7 +1240,7 @@ export default function App() {
           </>
         )}
 
-        {tab === "history" && <HistoryScreen history={history} loading={historyLoading} isGuest={!user} onSignIn={handleSignIn} />}
+        {tab === "history" && <HistoryScreen history={history} loading={historyLoading} isGuest={!user} onSignIn={handleSignIn} onUpdateEntry={handleUpdateEntry} />}
       </div>
 
       {addPicker && routine && (
