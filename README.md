@@ -1,6 +1,6 @@
 # Baseline
 
-A smart, personalized gym workout tracker built for the YMCA. Baseline generates a fresh routine each session, learns from your history, and adapts to how you're feeling that day.
+A smart, personalized gym workout tracker built for folks who are just looking to keep a solid baseline. Baseline generates a fresh routine each session, learns from your history, and adapts to how you're feeling that day.
 
 **Live app → [blairhperry.github.io/baseline](https://blairhperry.github.io/baseline/)**
 
