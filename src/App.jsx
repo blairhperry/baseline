@@ -11,6 +11,10 @@ const WORKOUTS = {
     { name: "Elliptical", duration: "8 min", note: "Moderate resistance, arms engaged", muscles: "Full Body · Low Impact", subs: ["Stationary Bike", "Rowing Machine"], equipment: "cardioMachine" },
     { name: "Stair Climber", duration: "6 min", note: "Steady pace, don't hold the rails", muscles: "Glutes · Quads · Cardio", subs: ["Treadmill Intervals", "Stationary Bike"], equipment: "cardioMachine" },
     { name: "Jump Rope", duration: "5 min", note: "3 rounds of 90 sec with 30 sec rest", muscles: "Calves · Cardio · Coordination", subs: ["Treadmill Intervals", "Stair Climber"], equipment: "minimal" },
+    { name: "Quick Jog", duration: "8 min", note: "Easy conversational pace — outside or around the track", muscles: "Heart · Legs", subs: ["Jumping Jacks", "High Knees"], equipment: "bodyweight" },
+    { name: "Jumping Jacks", duration: "5 min", note: "3 rounds of 90 sec with 30 sec rest, steady rhythm", muscles: "Full Body · Cardio", subs: ["High Knees", "Quick Jog"], equipment: "bodyweight" },
+    { name: "High Knees", duration: "5 min", note: "Drive knees to hip height, pump your arms in sync", muscles: "Hip Flexors · Calves · Cardio", subs: ["Jumping Jacks", "Quick Jog"], equipment: "bodyweight" },
+    { name: "Burpees", duration: "5 min", note: "5 rounds of 10 reps with 45 sec rest, full range each rep", muscles: "Full Body · Cardio · Core", subs: ["High Knees", "Jumping Jacks"], equipment: "bodyweight" },
   ],
   core: [
     { name: "Plank", sets: 3, duration: "30 sec", note: "Neutral spine, breathe steadily", muscles: "Deep Core · Shoulders", subs: ["Dead Bug", "Bird Dog"], equipment: "bodyweight" },
