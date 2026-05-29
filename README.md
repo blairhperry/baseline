@@ -18,10 +18,11 @@ Baseline is built for people who aren't training for a competition or following 
 Jump straight into a workout without signing in. History and preferences are saved on your device. Sign in with Google at any point to sync across devices.
 
 ### Pre-workout check-in
-Before each session, Baseline asks four quick questions to tailor the routine:
+Before each session, Baseline asks five quick questions to tailor the routine:
 - **Energy level** — Low, Good, or Pumped (adjusts workout volume)
 - **How long do you have?** — Quick (~20 min), Standard (~35 min), or Extended (~50 min)
 - **Any cardio already today?** — Skips the cardio warmup if you've already been active
+- **What equipment do you have today?** — Toggle individual equipment types or tap a preset (Full gym / Dumbbells / Body weight). Pre-filled from your default in Preferences.
 - **Anything to go easy on?** — Filters out exercises targeting sore or recovering muscle groups (Legs, Back, Shoulders & Arms)
 
 ### Smart exercise selection
@@ -32,8 +33,9 @@ Two layers of intelligence work together to keep routines fresh:
 A **Today's focus** chip row shows which muscle groups (Upper Push, Upper Pull, Lower Body, Core) the generated routine covers at a glance.
 
 ### Preferences ⚙
-A gear icon in the header opens a preferences panel with two settings:
+A gear icon in the header opens a preferences panel with three settings:
 - **Default Timeframe** — set your usual session length so it pre-selects at check-in every day. Still overridable any day you need to.
+- **Default Equipment** — set which equipment you normally have access to. Pre-fills the equipment question at check-in so you only need to tweak when something's different.
 - **Hidden Exercises** — see everything you've blocked, grouped by category, with a one-tap Restore button for each.
 
 ### Per-user exercise blocking
@@ -61,11 +63,11 @@ History cards are collapsed by default for easy scanning — just the date, comp
 
 | Category | Exercises |
 |---|---|
-| Cardio | 6 |
+| Cardio | 10 (6 machine-based, 4 bodyweight) |
 | Strength | 19 |
 | Core | 13 |
 
-A routine generates **1 cardio + 4 strength + 2 core** by default. Timeframe and energy level adjust the counts; blocked and muscle-group-filtered exercises are excluded before selection.
+Each exercise carries an equipment tag (`bodyweight`, `dumbbell`, `cable`, `machine`, `cardioMachine`, `minimal`) used for filtering. A routine generates **1 cardio + 4 strength + 2 core** by default. Timeframe, energy level, equipment availability, and muscle-group filters all adjust what's selected.
 
 ---
 
