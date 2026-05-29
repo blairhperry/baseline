@@ -150,7 +150,9 @@ function generateRoutine(checkin = null, blocked = new Set(), recentNames = new 
   };
 }
 
-const STORAGE_KEY = "ymca_workout_v1";
+const STORAGE_KEY       = "ymca_workout_v1";
+const GUEST_HISTORY_KEY = "ymca_guest_history_v1";
+const GUEST_BLOCKED_KEY = "ymca_guest_blocked_v1";
 
 function saveState(state) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
@@ -382,7 +384,7 @@ function TabBar({ tab, onChange, historyCount }) {
 }
 
 // ── History Screen ────────────────────────────────────────────────────────────
-function HistoryScreen({ history, loading }) {
+function HistoryScreen({ history, loading, isGuest, onSignIn }) {
   if (loading) {
     return (
       <div style={{ textAlign: "center", padding: "60px 20px" }}>
@@ -396,15 +398,29 @@ function HistoryScreen({ history, loading }) {
       <div style={{ textAlign: "center", padding: "60px 20px" }}>
         <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
         <p style={{ fontSize: 15, fontWeight: 600, color: "#1E293B", margin: "0 0 8px", fontFamily: "'DM Sans', sans-serif" }}>No workouts logged yet</p>
-        <p style={{ fontSize: 13, color: "#94A3B8", margin: 0, fontFamily: "'DM Sans', sans-serif" }}>
+        <p style={{ fontSize: 13, color: "#94A3B8", margin: "0 0 24px", fontFamily: "'DM Sans', sans-serif" }}>
           Finish a session on the Today tab to start building your history.
         </p>
+        {isGuest && (
+          <button onClick={onSignIn} style={{ padding: "12px 24px", borderRadius: 12, background: "linear-gradient(135deg, #1E293B 0%, #334155 100%)", color: "#FFFFFF", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+            Sign in to sync across devices →
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {isGuest && (
+        <div style={{ background: "#F0F9FF", border: "1.5px solid #BAE6FD", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#0369A1", fontFamily: "'DM Sans', sans-serif" }}>Saved on this device only</div>
+            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2, fontFamily: "'DM Sans', sans-serif" }}>Sign in to sync across devices</div>
+          </div>
+          <button onClick={onSignIn} style={{ fontSize: 13, fontWeight: 600, color: "#0EA5E9", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", padding: 0 }}>Sign in →</button>
+        </div>
+      )}
       {[...history].reverse().map(entry => {
         const pct = Math.round((entry.completedCount / entry.totalCount) * 100);
         const allDone = entry.completedCount === entry.totalCount;
@@ -711,7 +727,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) { setHistory([]); setBlockedExercises(new Set()); return; }
+    if (user === undefined) return;
+    if (user === null) {
+      try {
+        const raw = localStorage.getItem(GUEST_HISTORY_KEY);
+        const entries = raw ? JSON.parse(raw) : [];
+        setHistory(entries);
+        setLastMetrics(buildLastMetrics(entries));
+      } catch {}
+      try {
+        const raw = localStorage.getItem(GUEST_BLOCKED_KEY);
+        setBlockedExercises(new Set(raw ? JSON.parse(raw) : []));
+      } catch {}
+      return;
+    }
     setHistoryLoading(true);
     const q = query(collection(db, "users", user.uid, "history"), orderBy("id", "asc"));
     const prefsRef = doc(db, "users", user.uid, "preferences", "exercises");
@@ -744,16 +773,21 @@ export default function App() {
   }, [routine, checked, sessionCount, metrics]);
 
   const commitToHistory = async (currentRoutine, currentChecked, currentMetrics, doneCount, totalCount) => {
-    if (doneCount === 0 || !user) return;
+    if (doneCount === 0) return;
     const entry = buildEntry(currentRoutine, currentChecked, currentMetrics, doneCount, totalCount);
-    try {
-      await addDoc(collection(db, "users", user.uid, "history"), entry);
-      setHistory(prev => {
-        const next = [...prev, entry];
-        setLastMetrics(buildLastMetrics(next));
-        return next;
-      });
-    } catch {}
+    if (user) {
+      try { await addDoc(collection(db, "users", user.uid, "history"), entry); } catch {}
+    } else {
+      try {
+        const existing = JSON.parse(localStorage.getItem(GUEST_HISTORY_KEY) || "[]");
+        localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify([...existing, entry]));
+      } catch {}
+    }
+    setHistory(prev => {
+      const next = [...prev, entry];
+      setLastMetrics(buildLastMetrics(next));
+      return next;
+    });
   };
 
   const toggleBlock = async (exerciseName) => {
@@ -764,7 +798,13 @@ export default function App() {
       try {
         await setDoc(doc(db, "users", user.uid, "preferences", "exercises"), { blocked: Array.from(next) });
       } catch {}
+    } else {
+      try { localStorage.setItem(GUEST_BLOCKED_KEY, JSON.stringify(Array.from(next))); } catch {}
     }
+  };
+
+  const handleSignIn = async () => {
+    try { await signInWithPopup(auth, googleProvider); } catch {}
   };
 
   const totalEx   = routine ? routine.cardio.length + routine.core.length + routine.strength.length : 0;
@@ -857,8 +897,6 @@ export default function App() {
     );
   }
 
-  if (user === null) return <LoginScreen />;
-
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #F8FAFC 0%, #EFF6FF 100%)", fontFamily: "'DM Sans', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=DM+Serif+Display&display=swap" rel="stylesheet" />
@@ -872,10 +910,14 @@ export default function App() {
               Baseline · {lastCheckin?.timeframe ? TIMEFRAME_LABELS[lastCheckin.timeframe] : "30–45 min"}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 24, height: 24, borderRadius: "50%", border: "1.5px solid #E2E8F0" }} />}
-              <button onClick={() => signOut(auth)} style={{ fontSize: 12, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", padding: 0, fontWeight: 500 }}>
-                Sign out
-              </button>
+              {user ? (
+                <>
+                  {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 24, height: 24, borderRadius: "50%", border: "1.5px solid #E2E8F0" }} />}
+                  <button onClick={() => signOut(auth)} style={{ fontSize: 12, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", padding: 0, fontWeight: 500 }}>Sign out</button>
+                </>
+              ) : (
+                <button onClick={handleSignIn} style={{ fontSize: 12, fontWeight: 600, color: "#0EA5E9", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", padding: 0 }}>Sign in →</button>
+              )}
             </div>
           </div>
           <h1 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: 34, fontWeight: 400, color: "#0F172A", lineHeight: 1.15, letterSpacing: "-0.5px" }}>
@@ -933,20 +975,22 @@ export default function App() {
                   <button onClick={handleFinish} style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #16A34A 0%, #15803D 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(22,163,74,0.3)", transition: "transform 0.15s, box-shadow 0.15s", marginBottom: 10 }}
                     onMouseEnter={e => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = "0 8px 28px rgba(22,163,74,0.4)"; }}
                     onMouseLeave={e => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "0 4px 20px rgba(22,163,74,0.3)"; }}
-                  >✓ Finish &amp; Save Workout</button>
+                  >{user ? "✓ Finish & Save Workout" : "✓ Finish Workout"}</button>
                 )}
 
                 <button onClick={handleNew} style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #1E293B 0%, #334155 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", transition: "transform 0.15s, box-shadow 0.15s" }}
                   onMouseEnter={e => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = "0 8px 28px rgba(15,23,42,0.3)"; }}
                   onMouseLeave={e => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "0 4px 20px rgba(15,23,42,0.25)"; }}
                 >🔀 New Routine</button>
-                <p style={{ textAlign: "center", fontSize: 12, color: "#94A3B8", marginTop: 10, marginBottom: 0 }}>Your routine is saved and will be here when you return</p>
+                <p style={{ textAlign: "center", fontSize: 12, color: "#94A3B8", marginTop: 10, marginBottom: 0 }}>
+                  {user ? "Your routine is saved and will be here when you return" : "Saved on this device · Sign in to sync across devices"}
+                </p>
               </>
             )}
           </>
         )}
 
-        {tab === "history" && <HistoryScreen history={history} loading={historyLoading} />}
+        {tab === "history" && <HistoryScreen history={history} loading={historyLoading} isGuest={!user} onSignIn={handleSignIn} />}
       </div>
 
       {addPicker && routine && (
