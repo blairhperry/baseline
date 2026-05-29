@@ -5,48 +5,48 @@ import { auth, db, googleProvider } from "./firebase";
 
 const WORKOUTS = {
   cardio: [
-    { name: "Treadmill Intervals", duration: "8 min", note: "Alternate 1 min jog / 1 min brisk walk", muscles: "Heart · Legs", subs: ["Stationary Bike", "Elliptical"] },
-    { name: "Rowing Machine", duration: "8 min", note: "Steady moderate pace, focus on form", muscles: "Full Body · Cardio", subs: ["Elliptical", "Treadmill Intervals"] },
-    { name: "Stationary Bike", duration: "8 min", note: "Moderate resistance, 80–90 RPM", muscles: "Quads · Cardio", subs: ["Treadmill Intervals", "Elliptical"] },
-    { name: "Elliptical", duration: "8 min", note: "Moderate resistance, arms engaged", muscles: "Full Body · Low Impact", subs: ["Stationary Bike", "Rowing Machine"] },
-    { name: "Stair Climber", duration: "6 min", note: "Steady pace, don't hold the rails", muscles: "Glutes · Quads · Cardio", subs: ["Treadmill Intervals", "Stationary Bike"] },
-    { name: "Jump Rope", duration: "5 min", note: "3 rounds of 90 sec with 30 sec rest", muscles: "Calves · Cardio · Coordination", subs: ["Treadmill Intervals", "Stair Climber"] },
+    { name: "Treadmill Intervals", duration: "8 min", note: "Alternate 1 min jog / 1 min brisk walk", muscles: "Heart · Legs", subs: ["Stationary Bike", "Elliptical"], equipment: "cardioMachine" },
+    { name: "Rowing Machine", duration: "8 min", note: "Steady moderate pace, focus on form", muscles: "Full Body · Cardio", subs: ["Elliptical", "Treadmill Intervals"], equipment: "cardioMachine" },
+    { name: "Stationary Bike", duration: "8 min", note: "Moderate resistance, 80–90 RPM", muscles: "Quads · Cardio", subs: ["Treadmill Intervals", "Elliptical"], equipment: "cardioMachine" },
+    { name: "Elliptical", duration: "8 min", note: "Moderate resistance, arms engaged", muscles: "Full Body · Low Impact", subs: ["Stationary Bike", "Rowing Machine"], equipment: "cardioMachine" },
+    { name: "Stair Climber", duration: "6 min", note: "Steady pace, don't hold the rails", muscles: "Glutes · Quads · Cardio", subs: ["Treadmill Intervals", "Stationary Bike"], equipment: "cardioMachine" },
+    { name: "Jump Rope", duration: "5 min", note: "3 rounds of 90 sec with 30 sec rest", muscles: "Calves · Cardio · Coordination", subs: ["Treadmill Intervals", "Stair Climber"], equipment: "minimal" },
   ],
   core: [
-    { name: "Plank", sets: 3, duration: "30 sec", note: "Neutral spine, breathe steadily", muscles: "Deep Core · Shoulders", subs: ["Dead Bug", "Bird Dog"] },
-    { name: "Cable Woodchops", sets: 3, reps: "10 each side", note: "Rotate from the hips, not just arms", muscles: "Obliques · Core", subs: ["Cable Pallof Press", "Bird Dog"] },
-    { name: "Ab Wheel Rollouts", sets: 3, reps: 10, note: "Slow and controlled both ways", muscles: "Deep Core · Shoulders", subs: ["Plank", "Dead Bug"] },
-    { name: "Dead Bug", sets: 3, reps: "8 each side", note: "Press lower back into floor the whole time", muscles: "Deep Core · Hip Flexors", subs: ["Bird Dog", "Plank"] },
-    { name: "Cable Pallof Press", sets: 3, reps: "10 each side", note: "Anti-rotation — resist the cable pulling you", muscles: "Obliques · Anti-Rotation Core", subs: ["Cable Woodchops", "Plank"] },
-    { name: "Hanging Knee Raises", sets: 3, reps: 12, note: "Control the descent, no swinging", muscles: "Lower Abs · Hip Flexors", subs: ["Stability Ball Crunches", "Dead Bug"] },
-    { name: "Bird Dog", sets: 3, reps: "10 each side", note: "Pause 2 sec at full extension", muscles: "Lower Back · Glutes · Core", subs: ["Dead Bug", "Plank"] },
-    { name: "Stability Ball Crunches", sets: 3, reps: 15, note: "Full range of motion over the ball", muscles: "Upper Abs · Core", subs: ["Hanging Knee Raises", "Ab Wheel Rollouts"] },
-    { name: "Russian Twists", sets: 3, reps: "15 each side", note: "Feet off floor for extra challenge, rotate fully", muscles: "Obliques · Core", subs: ["Cable Woodchops", "Dead Bug"] },
-    { name: "Side Plank", sets: 3, duration: "25 sec each side", note: "Stack feet or stagger them, hips stay lifted", muscles: "Obliques · Hip Abductors", subs: ["Plank", "Cable Pallof Press"] },
-    { name: "Lying Leg Raises", sets: 3, reps: 12, note: "Lower back pressed to floor, control the descent", muscles: "Lower Abs · Hip Flexors", subs: ["Hanging Knee Raises", "Dead Bug"] },
-    { name: "Mountain Climbers", sets: 3, duration: "30 sec", note: "Drive knees to chest alternately, keep hips level", muscles: "Core · Shoulders · Hip Flexors", subs: ["Plank", "Bird Dog"] },
-    { name: "Superman Hold", sets: 3, reps: 10, note: "Lift arms and legs simultaneously, 2 sec pause at top", muscles: "Lower Back · Glutes · Core", subs: ["Bird Dog", "Dead Bug"] },
+    { name: "Plank", sets: 3, duration: "30 sec", note: "Neutral spine, breathe steadily", muscles: "Deep Core · Shoulders", subs: ["Dead Bug", "Bird Dog"], equipment: "bodyweight" },
+    { name: "Cable Woodchops", sets: 3, reps: "10 each side", note: "Rotate from the hips, not just arms", muscles: "Obliques · Core", subs: ["Cable Pallof Press", "Bird Dog"], equipment: "cable" },
+    { name: "Ab Wheel Rollouts", sets: 3, reps: 10, note: "Slow and controlled both ways", muscles: "Deep Core · Shoulders", subs: ["Plank", "Dead Bug"], equipment: "minimal" },
+    { name: "Dead Bug", sets: 3, reps: "8 each side", note: "Press lower back into floor the whole time", muscles: "Deep Core · Hip Flexors", subs: ["Bird Dog", "Plank"], equipment: "bodyweight" },
+    { name: "Cable Pallof Press", sets: 3, reps: "10 each side", note: "Anti-rotation — resist the cable pulling you", muscles: "Obliques · Anti-Rotation Core", subs: ["Cable Woodchops", "Plank"], equipment: "cable" },
+    { name: "Hanging Knee Raises", sets: 3, reps: 12, note: "Control the descent, no swinging", muscles: "Lower Abs · Hip Flexors", subs: ["Stability Ball Crunches", "Dead Bug"], equipment: "minimal" },
+    { name: "Bird Dog", sets: 3, reps: "10 each side", note: "Pause 2 sec at full extension", muscles: "Lower Back · Glutes · Core", subs: ["Dead Bug", "Plank"], equipment: "bodyweight" },
+    { name: "Stability Ball Crunches", sets: 3, reps: 15, note: "Full range of motion over the ball", muscles: "Upper Abs · Core", subs: ["Hanging Knee Raises", "Ab Wheel Rollouts"], equipment: "minimal" },
+    { name: "Russian Twists", sets: 3, reps: "15 each side", note: "Feet off floor for extra challenge, rotate fully", muscles: "Obliques · Core", subs: ["Cable Woodchops", "Dead Bug"], equipment: "bodyweight" },
+    { name: "Side Plank", sets: 3, duration: "25 sec each side", note: "Stack feet or stagger them, hips stay lifted", muscles: "Obliques · Hip Abductors", subs: ["Plank", "Cable Pallof Press"], equipment: "bodyweight" },
+    { name: "Lying Leg Raises", sets: 3, reps: 12, note: "Lower back pressed to floor, control the descent", muscles: "Lower Abs · Hip Flexors", subs: ["Hanging Knee Raises", "Dead Bug"], equipment: "bodyweight" },
+    { name: "Mountain Climbers", sets: 3, duration: "30 sec", note: "Drive knees to chest alternately, keep hips level", muscles: "Core · Shoulders · Hip Flexors", subs: ["Plank", "Bird Dog"], equipment: "bodyweight" },
+    { name: "Superman Hold", sets: 3, reps: 10, note: "Lift arms and legs simultaneously, 2 sec pause at top", muscles: "Lower Back · Glutes · Core", subs: ["Bird Dog", "Dead Bug"], equipment: "bodyweight" },
   ],
   strength: [
-    { name: "Goblet Squat", sets: 3, reps: 12, note: "Dumbbell at chest, sit into your hips", muscles: "Quads · Glutes · Core", subs: ["Leg Press", "Dumbbell Lunges"] },
-    { name: "Dumbbell Romanian Deadlift", sets: 3, reps: 12, note: "Hinge at the hips, slight knee bend", muscles: "Hamstrings · Glutes · Lower Back", subs: ["Leg Press", "Goblet Squat"] },
-    { name: "Chest Press Machine", sets: 3, reps: 12, note: "Elbows slightly below shoulders", muscles: "Chest · Triceps · Front Delt", subs: ["Incline Dumbbell Press", "Dumbbell Shoulder Press"] },
-    { name: "Lat Pulldown", sets: 3, reps: 12, note: "Pull to upper chest, full stretch at top", muscles: "Lats · Biceps · Upper Back", subs: ["Seated Cable Row", "Face Pulls"] },
-    { name: "Seated Cable Row", sets: 3, reps: 12, note: "Drive elbows back, squeeze shoulder blades", muscles: "Mid Back · Biceps · Rear Delt", subs: ["Lat Pulldown", "Face Pulls"] },
-    { name: "Dumbbell Shoulder Press", sets: 3, reps: 12, note: "Don't lock out elbows at top", muscles: "Shoulders · Triceps", subs: ["Chest Press Machine", "Face Pulls"] },
-    { name: "Leg Press", sets: 3, reps: 12, note: "Feet shoulder-width, don't lock knees", muscles: "Quads · Glutes · Hamstrings", subs: ["Goblet Squat", "Dumbbell Lunges"] },
-    { name: "Cable Tricep Pushdown", sets: 3, reps: 15, note: "Keep elbows pinned at sides", muscles: "Triceps", subs: ["Dumbbell Shoulder Press", "Incline Dumbbell Press"] },
-    { name: "Dumbbell Bicep Curls", sets: 3, reps: 12, note: "Full range, no momentum swinging", muscles: "Biceps", subs: ["Lat Pulldown", "Seated Cable Row"] },
-    { name: "Dumbbell Lunges", sets: 3, reps: "10 each leg", note: "Keep front knee over ankle", muscles: "Quads · Glutes · Balance", subs: ["Goblet Squat", "Leg Press"] },
-    { name: "Incline Dumbbell Press", sets: 3, reps: 12, note: "30–45° incline, neutral wrist", muscles: "Upper Chest · Front Delt · Triceps", subs: ["Chest Press Machine", "Dumbbell Shoulder Press"] },
-    { name: "Face Pulls", sets: 3, reps: 15, note: "Pull to forehead level, great for posture", muscles: "Rear Delt · Rotator Cuff · Traps", subs: ["Seated Cable Row", "Lat Pulldown"] },
-    { name: "Pec Deck", sets: 3, reps: 12, note: "Keep slight bend in elbows, squeeze hard at center", muscles: "Chest · Front Delt", subs: ["Chest Press Machine", "Incline Dumbbell Press"] },
-    { name: "Dumbbell Lateral Raise", sets: 3, reps: 12, note: "Lead with elbows, stop at shoulder height", muscles: "Shoulders · Traps", subs: ["Dumbbell Shoulder Press", "Face Pulls"] },
-    { name: "Leg Extension Machine", sets: 3, reps: 12, note: "Full extension at top, slow on the way down", muscles: "Quads", subs: ["Goblet Squat", "Leg Press"] },
-    { name: "Leg Curl Machine", sets: 3, reps: 12, note: "Full range, control the negative", muscles: "Hamstrings", subs: ["Dumbbell Romanian Deadlift", "Leg Press"] },
-    { name: "Dumbbell Single-Arm Row", sets: 3, reps: "10 each side", note: "Support on bench, drive elbow to hip", muscles: "Mid Back · Biceps", subs: ["Seated Cable Row", "Lat Pulldown"] },
-    { name: "Assisted Pull-Up Machine", sets: 3, reps: 10, note: "Full hang at bottom, chin over bar at top", muscles: "Lats · Biceps · Core", subs: ["Lat Pulldown", "Seated Cable Row"] },
-    { name: "Dumbbell Hammer Curls", sets: 3, reps: 12, note: "Neutral grip, control both ways", muscles: "Biceps · Forearms", subs: ["Dumbbell Bicep Curls", "Seated Cable Row"] },
+    { name: "Goblet Squat", sets: 3, reps: 12, note: "Dumbbell at chest, sit into your hips", muscles: "Quads · Glutes · Core", subs: ["Leg Press", "Dumbbell Lunges"], equipment: "dumbbell" },
+    { name: "Dumbbell Romanian Deadlift", sets: 3, reps: 12, note: "Hinge at the hips, slight knee bend", muscles: "Hamstrings · Glutes · Lower Back", subs: ["Leg Press", "Goblet Squat"], equipment: "dumbbell" },
+    { name: "Chest Press Machine", sets: 3, reps: 12, note: "Elbows slightly below shoulders", muscles: "Chest · Triceps · Front Delt", subs: ["Incline Dumbbell Press", "Dumbbell Shoulder Press"], equipment: "machine" },
+    { name: "Lat Pulldown", sets: 3, reps: 12, note: "Pull to upper chest, full stretch at top", muscles: "Lats · Biceps · Upper Back", subs: ["Seated Cable Row", "Face Pulls"], equipment: "machine" },
+    { name: "Seated Cable Row", sets: 3, reps: 12, note: "Drive elbows back, squeeze shoulder blades", muscles: "Mid Back · Biceps · Rear Delt", subs: ["Lat Pulldown", "Face Pulls"], equipment: "cable" },
+    { name: "Dumbbell Shoulder Press", sets: 3, reps: 12, note: "Don't lock out elbows at top", muscles: "Shoulders · Triceps", subs: ["Chest Press Machine", "Face Pulls"], equipment: "dumbbell" },
+    { name: "Leg Press", sets: 3, reps: 12, note: "Feet shoulder-width, don't lock knees", muscles: "Quads · Glutes · Hamstrings", subs: ["Goblet Squat", "Dumbbell Lunges"], equipment: "machine" },
+    { name: "Cable Tricep Pushdown", sets: 3, reps: 15, note: "Keep elbows pinned at sides", muscles: "Triceps", subs: ["Dumbbell Shoulder Press", "Incline Dumbbell Press"], equipment: "cable" },
+    { name: "Dumbbell Bicep Curls", sets: 3, reps: 12, note: "Full range, no momentum swinging", muscles: "Biceps", subs: ["Lat Pulldown", "Seated Cable Row"], equipment: "dumbbell" },
+    { name: "Dumbbell Lunges", sets: 3, reps: "10 each leg", note: "Keep front knee over ankle", muscles: "Quads · Glutes · Balance", subs: ["Goblet Squat", "Leg Press"], equipment: "dumbbell" },
+    { name: "Incline Dumbbell Press", sets: 3, reps: 12, note: "30–45° incline, neutral wrist", muscles: "Upper Chest · Front Delt · Triceps", subs: ["Chest Press Machine", "Dumbbell Shoulder Press"], equipment: "dumbbell" },
+    { name: "Face Pulls", sets: 3, reps: 15, note: "Pull to forehead level, great for posture", muscles: "Rear Delt · Rotator Cuff · Traps", subs: ["Seated Cable Row", "Lat Pulldown"], equipment: "cable" },
+    { name: "Pec Deck", sets: 3, reps: 12, note: "Keep slight bend in elbows, squeeze hard at center", muscles: "Chest · Front Delt", subs: ["Chest Press Machine", "Incline Dumbbell Press"], equipment: "machine" },
+    { name: "Dumbbell Lateral Raise", sets: 3, reps: 12, note: "Lead with elbows, stop at shoulder height", muscles: "Shoulders · Traps", subs: ["Dumbbell Shoulder Press", "Face Pulls"], equipment: "dumbbell" },
+    { name: "Leg Extension Machine", sets: 3, reps: 12, note: "Full extension at top, slow on the way down", muscles: "Quads", subs: ["Goblet Squat", "Leg Press"], equipment: "machine" },
+    { name: "Leg Curl Machine", sets: 3, reps: 12, note: "Full range, control the negative", muscles: "Hamstrings", subs: ["Dumbbell Romanian Deadlift", "Leg Press"], equipment: "machine" },
+    { name: "Dumbbell Single-Arm Row", sets: 3, reps: "10 each side", note: "Support on bench, drive elbow to hip", muscles: "Mid Back · Biceps", subs: ["Seated Cable Row", "Lat Pulldown"], equipment: "dumbbell" },
+    { name: "Assisted Pull-Up Machine", sets: 3, reps: 10, note: "Full hang at bottom, chin over bar at top", muscles: "Lats · Biceps · Core", subs: ["Lat Pulldown", "Seated Cable Row"], equipment: "machine" },
+    { name: "Dumbbell Hammer Curls", sets: 3, reps: 12, note: "Neutral grip, control both ways", muscles: "Biceps · Forearms", subs: ["Dumbbell Bicep Curls", "Seated Cable Row"], equipment: "dumbbell" },
   ],
 };
 
@@ -68,6 +68,15 @@ const TIMEFRAME_COUNTS = {
 };
 
 const TIMEFRAME_LABELS = { quick: "~20 min", standard: "~35 min", extended: "~50 min" };
+
+const EQUIPMENT_TYPES = [
+  { key: "cardioMachine", label: "Cardio machines", icon: "🏃" },
+  { key: "machine",       label: "Gym machines",    icon: "🏋️" },
+  { key: "cable",         label: "Cables",          icon: "🔗" },
+  { key: "dumbbell",      label: "Dumbbells",       icon: "💪" },
+  { key: "minimal",       label: "Bars & minimal",  icon: "🤸" },
+];
+const ALL_EQUIPMENT = new Set(EQUIPMENT_TYPES.map(e => e.key));
 
 const chip = selected => ({
   borderRadius: 10, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
@@ -145,24 +154,38 @@ function weightedPick(arr, n, recentNames = new Set(), groupRecency = {}) {
   return result;
 }
 
-function generateRoutine(checkin = null, blocked = new Set(), recentNames = new Set(), groupRecency = {}) {
+function generateRoutine(checkin = null, blocked = new Set(), recentNames = new Set(), groupRecency = {}, equipmentAvailable = ALL_EQUIPMENT) {
+  const equipOk = ex => ex.equipment === "bodyweight" || equipmentAvailable.has(ex.equipment);
+
   let cardioPool   = WORKOUTS.cardio.filter(ex => !blocked.has(ex.name));
   let strengthPool = WORKOUTS.strength.filter(ex => !blocked.has(ex.name));
   let corePool     = WORKOUTS.core.filter(ex => !blocked.has(ex.name));
 
+  // Equipment filter — fall back to full pool if too few exercises remain
+  const feqCard = cardioPool.filter(equipOk);
+  const feqStr  = strengthPool.filter(equipOk);
+  const feqCore = corePool.filter(equipOk);
+  if (feqStr.length  >= 2) strengthPool = feqStr;
+  if (feqCore.length >= 2) corePool     = feqCore;
+  const filteredCardio = feqCard; // cardio can be empty (skip gracefully)
+
   if (checkin?.avoidMuscles?.length > 0) {
     const excluded = checkin.avoidMuscles.flatMap(g => AVOID_KEYWORDS[g] || []);
     const ok = ex => !excluded.some(kw => ex.muscles.includes(kw));
-    const fc  = cardioPool.filter(ok);   if (fc.length  >= 1) cardioPool   = fc;
+    const fc  = filteredCardio.filter(ok); // applied to already-equipment-filtered pool
     const fs  = strengthPool.filter(ok); if (fs.length  >= 3) strengthPool = fs;
     const fco = corePool.filter(ok);     if (fco.length >= 2) corePool     = fco;
+    cardioPool = fc.length >= 1 ? fc : filteredCardio;
+  } else {
+    cardioPool = filteredCardio;
   }
 
   const counts = TIMEFRAME_COUNTS[checkin?.timeframe] || TIMEFRAME_COUNTS.standard;
   const strengthCount = Math.max(1, counts.strength - (checkin?.energy === "low" ? 1 : 0));
+  const skipCardio = checkin?.cardioDone || cardioPool.length === 0;
 
   return {
-    cardio:   checkin?.cardioDone ? [] : weightedPick(cardioPool, 1, recentNames, groupRecency),
+    cardio:   skipCardio ? [] : weightedPick(cardioPool, 1, recentNames, groupRecency),
     strength: weightedPick(strengthPool, strengthCount, recentNames, groupRecency),
     core:     weightedPick(corePool, counts.core, recentNames, groupRecency),
   };
@@ -238,11 +261,25 @@ function buildLastMetrics(history) {
 }
 
 // ── Check-In Screen ───────────────────────────────────────────────────────────
-function CheckIn({ onComplete, defaultTimeframe }) {
-  const [energy, setEnergy]             = useState("good");
-  const [timeframe, setTimeframe]       = useState(defaultTimeframe || "standard");
-  const [cardioDone, setCardioDone]     = useState(false);
-  const [avoidMuscles, setAvoidMuscles] = useState([]);
+function CheckIn({ onComplete, defaultTimeframe, defaultEquipment }) {
+  const [energy, setEnergy]                       = useState("good");
+  const [timeframe, setTimeframe]                 = useState(defaultTimeframe || "standard");
+  const [cardioDone, setCardioDone]               = useState(false);
+  const [equipmentAvailable, setEquipmentAvailable] = useState(defaultEquipment ?? ALL_EQUIPMENT);
+  const [avoidMuscles, setAvoidMuscles]           = useState([]);
+
+  const toggleEquipment = key =>
+    setEquipmentAvailable(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
+  const EQUIPMENT_PRESETS = [
+    { label: "Full gym",    icon: "🏛️", set: ALL_EQUIPMENT },
+    { label: "Dumbbells",   icon: "💪", set: new Set(["dumbbell", "minimal"]) },
+    { label: "Body weight", icon: "🤸", set: new Set() },
+  ];
 
   const toggleAvoid = group =>
     setAvoidMuscles(prev =>
@@ -305,6 +342,27 @@ function CheckIn({ onComplete, defaultTimeframe }) {
         </div>
       </div>
 
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>What equipment do you have today?</div>
+        <div style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginBottom: 10 }}>Tap to deselect what's not available</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {EQUIPMENT_PRESETS.map(p => (
+            <button key={p.label} onClick={() => setEquipmentAvailable(new Set(p.set))}
+              style={{ ...chip(false), padding: "5px 10px", fontSize: 11, background: "#F8FAFC", border: "1.5px solid #E2E8F0" }}>
+              {p.icon} {p.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {EQUIPMENT_TYPES.map(eq => (
+            <button key={eq.key} onClick={() => toggleEquipment(eq.key)}
+              style={{ ...chip(equipmentAvailable.has(eq.key)), padding: "7px 12px" }}>
+              {eq.icon} {eq.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div style={{ marginBottom: 36 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>
           Anything to go easy on? <span style={{ fontWeight: 400, color: "#94A3B8" }}>(optional)</span>
@@ -321,7 +379,7 @@ function CheckIn({ onComplete, defaultTimeframe }) {
       </div>
 
       <button
-        onClick={() => onComplete({ energy, timeframe, cardioDone, avoidMuscles })}
+        onClick={() => onComplete({ energy, timeframe, cardioDone, equipmentAvailable, avoidMuscles })}
         style={{ width: "100%", padding: "16px", borderRadius: 16, background: "linear-gradient(135deg, #1E293B 0%, #334155 100%)", color: "#FFFFFF", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 4px 20px rgba(15,23,42,0.25)", transition: "transform 0.15s, box-shadow 0.15s" }}
         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(15,23,42,0.3)"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(15,23,42,0.25)"; }}
@@ -744,7 +802,12 @@ function AddSheet({ category, currentNames, onAdd, onClose, blockedExercises, ne
 }
 
 // ── Preferences Sheet ─────────────────────────────────────────────────────────
-function PrefsSheet({ onClose, blockedExercises, onToggleBlock, defaultTimeframe, onSetDefaultTimeframe }) {
+function PrefsSheet({ onClose, blockedExercises, onToggleBlock, defaultTimeframe, onSetDefaultTimeframe, defaultEquipment, onSetDefaultEquipment }) {
+  const toggleEquipmentPref = key => {
+    const next = new Set(defaultEquipment);
+    next.has(key) ? next.delete(key) : next.add(key);
+    onSetDefaultEquipment(next);
+  };
   const blockedByCategory = ["cardio", "strength", "core"]
     .map(cat => ({ cat, meta: CATEGORY_META[cat], exercises: WORKOUTS[cat].filter(ex => blockedExercises.has(ex.name)) }))
     .filter(g => g.exercises.length > 0);
@@ -774,6 +837,22 @@ function PrefsSheet({ onClose, blockedExercises, onToggleBlock, defaultTimeframe
                   <span style={{ fontSize: 20 }}>{opt.icon}</span>
                   <span>{opt.label}</span>
                   <span style={{ fontSize: 10, fontWeight: 400, color: defaultTimeframe === opt.key ? "#0EA5E9" : "#94A3B8" }}>{opt.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Default Equipment */}
+          <div style={{ padding: "18px 20px 20px", borderBottom: "1px solid #F1F5F9" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>Default Equipment</div>
+            <p style={{ fontSize: 12, color: "#94A3B8", fontFamily: "'DM Sans', sans-serif", margin: "0 0 12px", lineHeight: 1.5 }}>
+              Pre-fills the equipment question at check-in. Override any day you need to.
+            </p>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {EQUIPMENT_TYPES.map(eq => (
+                <button key={eq.key} onClick={() => toggleEquipmentPref(eq.key)}
+                  style={{ ...chip(defaultEquipment.has(eq.key)), padding: "8px 12px" }}>
+                  {eq.icon} {eq.label}
                 </button>
               ))}
             </div>
@@ -869,9 +948,10 @@ export default function App() {
   const [metrics, setMetrics]           = useState({});
   const [lastCheckin, setLastCheckin]   = useState(null);
   const [sessionNotes, setSessionNotes] = useState("");
-  const [blockedExercises, setBlockedExercises]       = useState(new Set());
+  const [blockedExercises, setBlockedExercises]         = useState(new Set());
   const [defaultTimeframePref, setDefaultTimeframePref] = useState("standard");
-  const [showPrefs, setShowPrefs]                     = useState(false);
+  const [defaultEquipmentPref, setDefaultEquipmentPref] = useState(ALL_EQUIPMENT);
+  const [showPrefs, setShowPrefs]                       = useState(false);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -894,6 +974,7 @@ export default function App() {
         const raw = localStorage.getItem(GUEST_PREFS_KEY);
         const prefs = raw ? JSON.parse(raw) : {};
         setDefaultTimeframePref(prefs.defaultTimeframe || "standard");
+        setDefaultEquipmentPref(prefs.equipment ? new Set(prefs.equipment) : ALL_EQUIPMENT);
       } catch {}
       return;
     }
@@ -901,6 +982,7 @@ export default function App() {
     setHistory([]);
     setBlockedExercises(new Set());
     setDefaultTimeframePref("standard");
+    setDefaultEquipmentPref(ALL_EQUIPMENT);
     setHistoryLoading(true);
     const q = query(collection(db, "users", user.uid, "history"), orderBy("id", "asc"));
     const prefsRef = doc(db, "users", user.uid, "preferences", "exercises");
@@ -908,8 +990,10 @@ export default function App() {
       .then(([snap, prefsSnap]) => {
         setHistory(snap.docs.map(d => ({ ...d.data(), _docId: d.id })));
         if (prefsSnap.exists()) {
-          setBlockedExercises(new Set(prefsSnap.data().blocked || []));
-          setDefaultTimeframePref(prefsSnap.data().defaultTimeframe || "standard");
+          const d = prefsSnap.data();
+          setBlockedExercises(new Set(d.blocked || []));
+          setDefaultTimeframePref(d.defaultTimeframe || "standard");
+          setDefaultEquipmentPref(d.equipment ? new Set(d.equipment) : ALL_EQUIPMENT);
         }
       })
       .catch(() => {})
@@ -969,13 +1053,24 @@ export default function App() {
   const handleSetDefaultTimeframe = async (tf) => {
     setDefaultTimeframePref(tf);
     if (user) {
-      try {
-        await setDoc(doc(db, "users", user.uid, "preferences", "exercises"), { defaultTimeframe: tf }, { merge: true });
-      } catch {}
+      try { await setDoc(doc(db, "users", user.uid, "preferences", "exercises"), { defaultTimeframe: tf }, { merge: true }); } catch {}
     } else {
       try {
         const existing = JSON.parse(localStorage.getItem(GUEST_PREFS_KEY) || "{}");
         localStorage.setItem(GUEST_PREFS_KEY, JSON.stringify({ ...existing, defaultTimeframe: tf }));
+      } catch {}
+    }
+  };
+
+  const handleSetDefaultEquipment = async (newSet) => {
+    setDefaultEquipmentPref(newSet);
+    const arr = Array.from(newSet);
+    if (user) {
+      try { await setDoc(doc(db, "users", user.uid, "preferences", "exercises"), { equipment: arr }, { merge: true }); } catch {}
+    } else {
+      try {
+        const existing = JSON.parse(localStorage.getItem(GUEST_PREFS_KEY) || "{}");
+        localStorage.setItem(GUEST_PREFS_KEY, JSON.stringify({ ...existing, equipment: arr }));
       } catch {}
     }
   };
@@ -1013,7 +1108,7 @@ export default function App() {
 
   const handleCheckinComplete = (checkin) => {
     setLastCheckin(checkin);
-    setRoutine(generateRoutine(checkin, blockedExercises, buildRecentNames(history), buildGroupRecency(history)));
+    setRoutine(generateRoutine(checkin, blockedExercises, buildRecentNames(history), buildGroupRecency(history), checkin.equipmentAvailable));
     setAnimKey(k => k + 1);
   };
 
@@ -1134,7 +1229,7 @@ export default function App() {
         {tab === "today" && (
           <>
             {!routine ? (
-              <CheckIn onComplete={handleCheckinComplete} defaultTimeframe={defaultTimeframePref} />
+              <CheckIn onComplete={handleCheckinComplete} defaultTimeframe={defaultTimeframePref} defaultEquipment={defaultEquipmentPref} />
             ) : (
               <>
                 <div style={{ marginBottom: 28 }}>
@@ -1226,6 +1321,8 @@ export default function App() {
           onToggleBlock={toggleBlock}
           defaultTimeframe={defaultTimeframePref}
           onSetDefaultTimeframe={handleSetDefaultTimeframe}
+          defaultEquipment={defaultEquipmentPref}
+          onSetDefaultEquipment={handleSetDefaultEquipment}
         />
       )}
 
