@@ -1,5 +1,5 @@
 {
-  "name": "ymca-workout",
+  "name": "baseline",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,10 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "npm run build && cd dist && git init && git checkout -b gh-pages && git add . && git commit -m 'Deploy' && git remote add origin https://github.com/blairhperry/baseline.git && git push -f origin gh-pages && cd .."
   },
   "dependencies": {
+    "firebase": "^12.13.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
